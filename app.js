@@ -33,6 +33,20 @@ class SoundFX {
 }
 const sfx = new SoundFX();
 
+function triggerHitGlow(entity, duration = 0.22) {
+    if (!entity) return;
+    entity.hurtTimer = Math.max(entity.hurtTimer || 0, duration);
+}
+
+function applyHitGlow(ctx, entity, glowRgb = '255,236,140') {
+    if (!entity || !entity.hurtTimer || entity.hurtTimer <= 0) return;
+    const pulseBase = Math.min(1, entity.hurtTimer / 0.22);
+    const pulse = pulseBase * (0.82 + Math.abs(Math.sin((entity.time || 0) * 30)) * 0.18);
+    ctx.shadowColor = `rgba(${glowRgb}, ${0.95 * pulse})`;
+    ctx.shadowBlur = 14 + pulse * 16;
+    ctx.filter = `brightness(${1.12 + pulse * 0.28}) saturate(${1.04 + pulse * 0.2})`;
+}
+
 // ─── INPUT ────────────────────────────────────────────────────────────────────
 class Input {
     constructor() {
@@ -355,11 +369,7 @@ class Arrow {
             for (const t of targets) {
                 if (!t || t.dead) continue;
                 if (Math.abs(t.x - this.x) < 30 && (t === this.world.outpost || Math.abs(t.y - this.y) < 50)) {
-                    if (t.takeDamage) t.takeDamage(15);
-                    else {
-                        t.hp -= 15; sfx.playHit();
-                        if (t.hp <= 0) t.dead = true;
-                    }
+                    t.takeDamage(15);
                     this.dead = true; return;
                 }
             }
@@ -367,8 +377,7 @@ class Arrow {
             for (const e of this.world.enemies) {
                 if (e.dead) continue;
                 if (Math.abs(e.x - this.x) < 28 && Math.abs(e.y - this.y) < 45) {
-                    e.hp -= this.dmg; sfx.playHit();
-                    if (e.hp <= 0) { e.dead = true; e.die(this.world); }
+                    e.takeDamage(this.dmg);
                     this.dead = true; return;
                 }
             }
@@ -414,11 +423,7 @@ class Fireball {
             const dist = Math.abs(t.x - this.x);
             const range = t === this.world.outpost ? 60 : 40;
             if (dist < range && (Math.abs(t.y - this.y) < 60 || t.hp !== undefined)) {
-                if (t.takeDamage) t.takeDamage(this.dmg);
-                else {
-                    t.hp -= this.dmg; sfx.playHit();
-                    if (t.hp <= 0 && t !== this.world.outpost) t.dead = true;
-                }
+                t.takeDamage(this.dmg);
                 for (let i = 0; i < 15; i++) this.world.particles.push(new Particle(this.x, this.y, '#ff4400'));
                 this.dead = true; return;
             }
@@ -445,8 +450,12 @@ class Archer {
         this.guardX = x; this.shootCd = 0; this.state = 'idle';
         this.shootRange = 320; this.preferDist = 200;
         this.drawingBow = false; this.drawTimer = 0;
-        this.dialogue = ''; this.dialogueTimer = 0;
+        this.dialogue = ''; this.dialogueTimer = 0; this.hurtTimer = 0;
         this.spawnWalkTimer = 1.5;
+    }
+    takeDamage(dmg) {
+        this.hp -= dmg; triggerHitGlow(this); sfx.playHit();
+        if (this.hp <= 0) this.dead = true;
     }
     update(dt, player) {
         this.time += dt;
@@ -454,6 +463,7 @@ class Archer {
         if (this.y > this.world.groundY - 60) { this.y = this.world.groundY - 60; this.vy = 0; }
         if (this.shootCd > 0) this.shootCd -= dt;
         if (this.dialogueTimer > 0) this.dialogueTimer -= dt;
+        if (this.hurtTimer > 0) this.hurtTimer -= dt;
 
         if (this.spawnWalkTimer > 0) {
             this.spawnWalkTimer -= dt;
@@ -499,25 +509,50 @@ class Archer {
     draw(ctx, cam) {
         if (this.dead) return;
         const sx = this.x - cam.x, sy = this.y;
-        ctx.save();
         const bob = this.state === 'walk' ? Math.abs(Math.sin(this.time * 12)) * 3 : 0;
+        ctx.save();
+        applyHitGlow(ctx, this);
         ctx.translate(sx, sy - bob);
         if (!this.facingRight) { ctx.translate(30, 0); ctx.scale(-1, 1); }
-        const ls = this.state === 'walk' ? Math.sin(this.time * 12) * 7 : 0;
-        ctx.fillStyle = '#3a2800'; ctx.fillRect(5 - ls, 40, 8, 20); ctx.fillRect(17 + ls, 40, 8, 20);
-        ctx.fillStyle = '#7a5c2e'; ctx.fillRect(0, 15, 30, 30);
-        ctx.fillStyle = '#5a3c18'; ctx.fillRect(0, 28, 30, 4);
-        ctx.fillStyle = '#5a7c3a'; ctx.fillRect(4, -8, 22, 10); ctx.fillRect(3, -5, 4, 8); ctx.fillRect(23, -5, 4, 8);
-        ctx.fillStyle = '#ffccaa'; ctx.fillRect(5, -5, 20, 20);
-        ctx.fillStyle = '#6a4820'; ctx.fillRect(-2, 15, 6, 18);
+        const ls = this.state === 'walk' ? Math.sin(this.time * 12) * 6 : 0;
+        ctx.fillStyle = '#44301c'; ctx.fillRect(6 - ls, 42, 7, 16); ctx.fillRect(17 + ls, 42, 7, 16);
+        ctx.fillStyle = '#1f150d'; ctx.fillRect(5 - ls, 56, 9, 4); ctx.fillRect(16 + ls, 56, 9, 4);
+        ctx.fillStyle = '#5f4121'; ctx.fillRect(-1, 18, 6, 17);
+        ctx.fillStyle = '#f2c6a3'; ctx.fillRect(0, 33, 5, 6);
+        ctx.fillStyle = '#604622';
+        ctx.beginPath();
+        ctx.moveTo(4, 16); ctx.lineTo(26, 16); ctx.lineTo(30, 40); ctx.lineTo(24, 44); ctx.lineTo(6, 44); ctx.lineTo(0, 40); ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#7f6034';
+        ctx.beginPath();
+        ctx.moveTo(11, 16); ctx.lineTo(19, 16); ctx.lineTo(22, 41); ctx.lineTo(8, 41); ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#5a7c3a';
+        ctx.beginPath();
+        ctx.moveTo(6, -8); ctx.lineTo(24, -8); ctx.lineTo(26, 5); ctx.lineTo(4, 5); ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#d4c28a'; ctx.fillRect(8, 23, 14, 3);
+        ctx.fillStyle = '#50341d'; ctx.fillRect(4, 39, 22, 4);
+        ctx.fillStyle = '#f2c6a3'; ctx.fillRect(12, 12, 6, 5);
+        ctx.fillStyle = '#f5c9a8';
+        ctx.beginPath(); ctx.ellipse(15, 2, 11, 12, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#4e6f33';
+        ctx.beginPath();
+        ctx.moveTo(6, 0); ctx.quadraticCurveTo(8, -11, 15, -12); ctx.quadraticCurveTo(24, -11, 25, 2); ctx.lineTo(24, 5); ctx.lineTo(6, 5); ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#e2b18f';
+        ctx.beginPath(); ctx.ellipse(7, 3, 2, 3, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#2b1a0f'; ctx.fillRect(15, -1, 3, 2); ctx.fillRect(20, 0, 2, 2);
+        ctx.fillStyle = '#cf9472'; ctx.fillRect(19, 3, 3, 3);
+        ctx.fillStyle = '#9a5f46'; ctx.fillRect(16, 7, 5, 1);
         ctx.save();
         ctx.translate(22, 18);
         if (this.drawingBow) {
             const drawFraction = Math.min(1, this.drawTimer / 1.0);
             ctx.rotate(-0.8 - drawFraction * 0.3);
         }
-        ctx.fillStyle = '#6a4820'; ctx.fillRect(-3, 0, 8, 20);
-        ctx.fillStyle = '#ffccaa'; ctx.fillRect(-2, 20, 7, 7);
+        ctx.fillStyle = '#654824'; ctx.fillRect(-3, 0, 8, 20);
+        ctx.fillStyle = '#f2c6a3'; ctx.fillRect(-2, 20, 7, 7);
         ctx.strokeStyle = '#5c3010'; ctx.lineWidth = 3;
         ctx.beginPath(); ctx.arc(6, 10, 20, -1.2, 1.2); ctx.stroke();
         ctx.beginPath();
@@ -617,8 +652,12 @@ class Enemy {
         this.world = world; this.x = x; this.y = 0;
         this.vx = 0; this.vy = 0; this.facingRight = false;
         this.time = 0; this.maxHp = 60; this.hp = 60;
-        this.speed = 80; this.dead = false; this.attackCd = 0;
+        this.speed = 80; this.dead = false; this.attackCd = 0; this.hurtTimer = 0;
         this.coinDropped = false;
+    }
+    takeDamage(dmg) {
+        this.hp -= dmg; triggerHitGlow(this); sfx.playHit();
+        if (this.hp <= 0) { this.dead = true; this.die(this.world); }
     }
     _findTarget() {
         let best = null; let bestDist = Infinity;
@@ -658,6 +697,7 @@ class Enemy {
         this.vy += 1200 * dt; this.y += this.vy * dt;
         if (this.y > this.world.groundY - 60) { this.y = this.world.groundY - 60; this.vy = 0; }
         if (this.attackCd > 0) this.attackCd -= dt;
+        if (this.hurtTimer > 0) this.hurtTimer -= dt;
 
         const target = this._findTarget();
         if (!target) return;
@@ -675,7 +715,7 @@ class Enemy {
                 const t = target.entity;
                 if (target.type === 'block') { t.takeDamage(10); }
                 else if (target.type === 'player') { t.takeDamage(15); }
-                else if (target.type === 'soldier' || target.type === 'worker') { t.hp -= 18; sfx.playHit(); if (t.hp <= 0) t.dead = true; }
+                else if (target.type === 'soldier' || target.type === 'worker') { t.takeDamage(18); }
                 else if (target.type === 'outpost' && !t.dead) { t.hp -= 1; if (t.hp < 0) t.hp = 0; }
             }
         }
@@ -693,8 +733,9 @@ class Enemy {
     draw(ctx, cam) {
         if (this.dead) return;
         const sx = this.x - cam.x, sy = this.y;
-        ctx.save();
         const bob = Math.abs(Math.sin(this.time * 10)) * 4;
+        ctx.save();
+        applyHitGlow(ctx, this, '255,168,120');
         ctx.translate(sx, sy - bob);
         if (!this.facingRight) { ctx.translate(30, 0); ctx.scale(-1, 1); }
         const ls = this.vx !== 0 ? Math.sin(this.time * 10) * 8 : 0;
@@ -727,6 +768,7 @@ class EnemyArcher extends Enemy {
         this.vy += 1200 * dt; this.y += this.vy * dt;
         if (this.y > this.world.groundY - 60) { this.y = this.world.groundY - 60; this.vy = 0; }
         if (this.shootCd > 0) this.shootCd -= dt;
+        if (this.hurtTimer > 0) this.hurtTimer -= dt;
 
         const target = this._findTarget();
         if (!target) { this.drawingBow = false; this.drawTimer = 0; return; }
@@ -754,8 +796,9 @@ class EnemyArcher extends Enemy {
     draw(ctx, cam) {
         if (this.dead) return;
         const sx = this.x - cam.x, sy = this.y;
-        ctx.save();
         const bob = Math.abs(Math.sin(this.time * 10)) * 4;
+        ctx.save();
+        applyHitGlow(ctx, this, '255,168,120');
         ctx.translate(sx, sy - bob);
         if (!this.facingRight) { ctx.translate(30, 0); ctx.scale(-1, 1); }
         const ls = this.vx !== 0 ? Math.sin(this.time * 10) * 8 : 0;
@@ -818,6 +861,7 @@ class EnemyDragon extends Enemy {
         this.vy = 0;
         if (this.attackCd > 0) this.attackCd -= dt;
         if (this.shootCd > 0) this.shootCd -= dt;
+        if (this.hurtTimer > 0) this.hurtTimer -= dt;
 
         // Ambient Smoke/Bubbles (Cute)
         if (!this.dead && Math.random() < 0.1) {
@@ -839,8 +883,12 @@ class EnemyDragon extends Enemy {
             this.facingRight = dir > 0;
             if (this.shootCd <= 0) {
                 this.shootCd = 3.0;
-                // Shoot fireball from head height
-                this.world.arrows.push(new Fireball(this.world, this.x + (this.facingRight ? 60 : -20), this.y - 10, target.x, target.entity.y || this.world.groundY - 30));
+                // Shoot two fireballs from head height with a slight vertical spread.
+                const fireballX = this.x + (this.facingRight ? 60 : -20);
+                const fireballY = this.y - 10;
+                const targetY = target.entity?.y ?? (this.world.groundY - 30);
+                this.world.arrows.push(new Fireball(this.world, fireballX, fireballY - 12, target.x, targetY - 18));
+                this.world.arrows.push(new Fireball(this.world, fireballX, fireballY + 12, target.x, targetY + 18));
                 sfx.playHit();
             }
             if (dist < 100 && this.attackCd <= 0) {
@@ -860,9 +908,10 @@ class EnemyDragon extends Enemy {
     draw(ctx, cam) {
         if (this.dead) return;
         const sx = this.x - cam.x, sy = this.y;
-        ctx.save();
-        // Subtle waddle bob
         const bob = Math.sin(this.time * 5) * 5;
+        ctx.save();
+        applyHitGlow(ctx, this, '255,166,98');
+        // Subtle waddle bob
         const legWalk = Math.sin(this.time * 8);
         ctx.translate(sx, sy + bob);
         if (!this.facingRight) { ctx.translate(100, 0); ctx.scale(-1, 1); }
@@ -1063,16 +1112,38 @@ class NPC {
     }
     draw(ctx, cam) {
         const sx = this.x - cam.x, sy = this.y;
-        ctx.save();
         const bob = this.state === 'walk' ? Math.abs(Math.sin(this.time * 12)) * 3 : Math.sin(this.time * 2);
+        ctx.save();
         ctx.translate(sx, sy - bob);
         if (!this.facingRight) { ctx.translate(30, 0); ctx.scale(-1, 1); }
-        ctx.fillStyle = '#111'; ctx.fillRect(8, 15, 6, 15);
-        ctx.fillStyle = '#222'; ctx.fillRect(5, 40, 8, 20); ctx.fillRect(17, 40, 8, 20);
-        ctx.fillStyle = this.tunicColor; ctx.fillRect(0, 15, 30, 30);
-        ctx.fillStyle = this.tunicColor; ctx.fillRect(12, 15, 8, 18);
-        ctx.fillStyle = '#ffccaa'; ctx.fillRect(12, 33, 6, 5);
-        ctx.fillStyle = '#ffccaa'; ctx.fillRect(5, -5, 20, 20);
+        const ls = this.state === 'walk' ? Math.sin(this.time * 12) * 5 : 0;
+        ctx.fillStyle = '#2d241f'; ctx.fillRect(6 - ls, 42, 7, 16); ctx.fillRect(17 + ls, 42, 7, 16);
+        ctx.fillStyle = '#13100d'; ctx.fillRect(5 - ls, 56, 9, 4); ctx.fillRect(16 + ls, 56, 9, 4);
+        ctx.fillStyle = '#6f4d2e'; ctx.fillRect(1, 19, 5, 17);
+        ctx.fillStyle = '#f1c6a3'; ctx.fillRect(1, 34, 5, 5);
+        ctx.fillStyle = this.tunicColor;
+        ctx.beginPath();
+        ctx.moveTo(4, 16); ctx.lineTo(26, 16); ctx.lineTo(30, 40); ctx.lineTo(24, 44); ctx.lineTo(6, 44); ctx.lineTo(0, 40); ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,0.10)';
+        ctx.beginPath();
+        ctx.moveTo(11, 17); ctx.lineTo(19, 17); ctx.lineTo(21, 41); ctx.lineTo(9, 41); ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#6b4b2f'; ctx.fillRect(4, 39, 22, 4);
+        ctx.fillStyle = '#d7c39a'; ctx.fillRect(8, 24, 14, 3);
+        ctx.fillStyle = '#6a482e'; ctx.fillRect(24, 19, 5, 17);
+        ctx.fillStyle = '#f1c6a3'; ctx.fillRect(24, 34, 5, 5);
+        ctx.fillStyle = '#f4caaa'; ctx.fillRect(12, 12, 6, 5);
+        ctx.beginPath(); ctx.ellipse(15, 2, 11, 12, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#5a3826';
+        ctx.beginPath();
+        ctx.moveTo(6, 1); ctx.quadraticCurveTo(8, -10, 15, -11); ctx.quadraticCurveTo(23, -10, 24, 1); ctx.lineTo(24, 6); ctx.lineTo(6, 6); ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#e2b18f';
+        ctx.beginPath(); ctx.ellipse(7, 3, 2, 3, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#2b1a12'; ctx.fillRect(15, -1, 3, 2); ctx.fillRect(20, 0, 2, 2);
+        ctx.fillStyle = '#ce9470'; ctx.fillRect(19, 3, 3, 3);
+        ctx.fillStyle = '#9a5f46'; ctx.fillRect(16, 7, 5, 1);
         ctx.restore();
         if (this.dialogueTimer > 0) {
             ctx.fillStyle = 'white'; ctx.fillRect(sx - 15, sy - 52, 120, 18);
@@ -1090,7 +1161,11 @@ class Worker {
         this.targetTree = null; this.chopTimer = 0; this.carryingLogs = 0;
         this.maxHp = 40; this.hp = 40; this.dead = false;
         this.tunicColor = '#b57b45';
-        this.dialogueTimer = 0; this.dialogue = '';
+        this.dialogueTimer = 0; this.dialogue = ''; this.hurtTimer = 0;
+    }
+    takeDamage(dmg) {
+        this.hp -= dmg; triggerHitGlow(this); sfx.playHit();
+        if (this.hp <= 0) this.dead = true;
     }
     update(dt) {
         if (this.dead) return;
@@ -1099,6 +1174,7 @@ class Worker {
         if (this.y > this.world.groundY - 60) { this.y = this.world.groundY - 60; this.vy = 0; }
 
         if (this.dialogueTimer > 0) this.dialogueTimer -= dt;
+        if (this.hurtTimer > 0) this.hurtTimer -= dt;
 
         if (this.state === 'idle') {
             if (this.carryingLogs > 0) {
@@ -1156,27 +1232,60 @@ class Worker {
     draw(ctx, cam) {
         if (this.dead) return;
         const sx = this.x - cam.x, sy = this.y;
-        ctx.save();
         const isWalk = this.state === 'walk_to_tree' || this.state === 'return_with_logs';
         const bob = isWalk ? Math.abs(Math.sin(this.time * 12)) * 3 : Math.sin(this.time * 2);
+        ctx.save();
+        applyHitGlow(ctx, this);
         ctx.translate(sx, sy - bob);
         if (!this.facingRight) { ctx.translate(30, 0); ctx.scale(-1, 1); }
-
-        ctx.fillStyle = '#111'; ctx.fillRect(8, 15, 6, 15);
-        ctx.fillStyle = '#222'; ctx.fillRect(5, 40, 8, 20); ctx.fillRect(17, 40, 8, 20);
-        ctx.fillStyle = this.tunicColor; ctx.fillRect(0, 15, 30, 30);
-        ctx.fillStyle = '#8b4513'; ctx.fillRect(12, 15, 8, 18);
-        ctx.fillStyle = '#ffccaa'; ctx.fillRect(12, 33, 6, 5);
-        ctx.fillStyle = '#ffccaa'; ctx.fillRect(5, -5, 20, 20);
+        const ls = isWalk ? Math.sin(this.time * 12) * 5 : 0;
+        ctx.fillStyle = '#32261c'; ctx.fillRect(6 - ls, 42, 7, 16); ctx.fillRect(17 + ls, 42, 7, 16);
+        ctx.fillStyle = '#1a130e'; ctx.fillRect(5 - ls, 56, 9, 4); ctx.fillRect(16 + ls, 56, 9, 4);
+        ctx.fillStyle = '#6b4826'; ctx.fillRect(1, 19, 5, 17);
+        ctx.fillStyle = '#f1c6a3'; ctx.fillRect(1, 34, 5, 5);
+        ctx.fillStyle = this.tunicColor;
+        ctx.beginPath();
+        ctx.moveTo(4, 16); ctx.lineTo(26, 16); ctx.lineTo(30, 40); ctx.lineTo(24, 44); ctx.lineTo(6, 44); ctx.lineTo(0, 40); ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#8b5a2b';
+        ctx.beginPath();
+        ctx.moveTo(11, 17); ctx.lineTo(19, 17); ctx.lineTo(21, 41); ctx.lineTo(9, 41); ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#5a3820'; ctx.fillRect(4, 39, 22, 4);
+        ctx.fillStyle = '#d7b36a'; ctx.fillRect(8, 24, 14, 3);
+        ctx.fillStyle = '#f1c6a3'; ctx.fillRect(12, 12, 6, 5);
+        ctx.fillStyle = '#f4caaa';
+        ctx.beginPath(); ctx.ellipse(15, 2, 11, 12, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#7c5432';
+        ctx.beginPath();
+        ctx.moveTo(6, 2); ctx.quadraticCurveTo(8, -8, 15, -11); ctx.quadraticCurveTo(21, -8, 24, 0); ctx.lineTo(24, 6); ctx.lineTo(6, 6); ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#caa05f'; ctx.fillRect(5, -4, 20, 4);
+        ctx.fillStyle = '#75512d'; ctx.fillRect(3, -2, 24, 6);
+        ctx.fillStyle = '#e2b18f';
+        ctx.beginPath(); ctx.ellipse(7, 3, 2, 3, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#2b1a12'; ctx.fillRect(15, -1, 3, 2); ctx.fillRect(20, 0, 2, 2);
+        ctx.fillStyle = '#ce9470'; ctx.fillRect(19, 3, 3, 3);
+        ctx.fillStyle = '#9a5f46'; ctx.fillRect(16, 7, 5, 1);
 
         if (this.state === 'chopping') {
             ctx.translate(20, 15);
             ctx.rotate(Math.sin(this.time * 10) * 0.8);
-            ctx.fillStyle = '#b78'; ctx.fillRect(0, -5, 4, 20);
-            ctx.fillStyle = '#888'; ctx.fillRect(-2, -5, 10, 8);
+            ctx.fillStyle = '#6b4826'; ctx.fillRect(-2, -2, 7, 18);
+            ctx.fillStyle = '#f1c6a3'; ctx.fillRect(-1, 15, 6, 6);
+            ctx.fillStyle = '#8a5b34'; ctx.fillRect(1, -10, 4, 24);
+            ctx.fillStyle = '#b9bcc1'; ctx.fillRect(-5, -12, 16, 8);
+            ctx.fillStyle = '#d7dbdf';
+            ctx.beginPath(); ctx.moveTo(4, -12); ctx.lineTo(12, -6); ctx.lineTo(4, -2); ctx.fill();
         } else if (this.carryingLogs > 0) {
-            ctx.fillStyle = '#6b3a1f'; ctx.fillRect(15, 5, 20, 10);
-            ctx.fillStyle = '#8b4513'; ctx.fillRect(16, 6, 18, 8);
+            ctx.fillStyle = '#6b4826'; ctx.fillRect(24, 20, 5, 14);
+            ctx.fillStyle = '#f1c6a3'; ctx.fillRect(24, 33, 5, 5);
+            ctx.fillStyle = '#6b3a1f'; ctx.fillRect(14, 6, 22, 10);
+            ctx.fillStyle = '#8b4513'; ctx.fillRect(15, 7, 20, 8);
+            ctx.fillStyle = '#5c2d0e'; ctx.fillRect(34, 7, 2, 8);
+        } else {
+            ctx.fillStyle = '#6b4826'; ctx.fillRect(24, 20, 5, 14);
+            ctx.fillStyle = '#f1c6a3'; ctx.fillRect(24, 33, 5, 5);
         }
         ctx.restore();
 
@@ -1202,8 +1311,12 @@ class Soldier {
         this.maxHp = 100; this.hp = 100;
         this.dead = false; this.following = false;
         this.guardX = x; this.attackCd = 0; this.state = 'idle';
-        this.dialogue = ''; this.dialogueTimer = 0;
+        this.dialogue = ''; this.dialogueTimer = 0; this.hurtTimer = 0;
         this.spawnWalkTimer = 1.5;
+    }
+    takeDamage(dmg) {
+        this.hp -= dmg; triggerHitGlow(this); sfx.playHit();
+        if (this.hp <= 0) this.dead = true;
     }
     update(dt, player) {
         this.time += dt;
@@ -1211,6 +1324,7 @@ class Soldier {
         if (this.y > this.world.groundY - 60) { this.y = this.world.groundY - 60; this.vy = 0; }
         if (this.attackCd > 0) this.attackCd -= dt;
         if (this.dialogueTimer > 0) this.dialogueTimer -= dt;
+        if (this.hurtTimer > 0) this.hurtTimer -= dt;
 
         if (this.spawnWalkTimer > 0) {
             this.spawnWalkTimer -= dt;
@@ -1231,10 +1345,7 @@ class Soldier {
             const dir = Math.sign(nearestEnemy.x - this.x);
             this.vx = dir * 150; this.facingRight = dir > 0; this.state = 'walk';
             if (nearestDist < 65 && this.attackCd <= 0) {
-                this.attackCd = 1.0; nearestEnemy.hp -= 22; sfx.playHit();
-                if (nearestEnemy.hp <= 0) {
-                    nearestEnemy.dead = true; nearestEnemy.die(this.world);
-                }
+                this.attackCd = 1.0; nearestEnemy.takeDamage(22);
                 const lines = ['For the king!', 'Take that!', 'Back, foul creature!', 'Hiyah!'];
                 this.dialogue = lines[Math.floor(Math.random() * lines.length)]; this.dialogueTimer = 1.5;
             }
@@ -1252,21 +1363,44 @@ class Soldier {
     draw(ctx, cam) {
         if (this.dead) return;
         const sx = this.x - cam.x, sy = this.y;
-        ctx.save();
         const bob = this.state === 'walk' ? Math.abs(Math.sin(this.time * 12)) * 3 : Math.sin(this.time * 2);
+        ctx.save();
+        applyHitGlow(ctx, this);
         ctx.translate(sx, sy - bob);
         if (!this.facingRight) { ctx.translate(30, 0); ctx.scale(-1, 1); }
-        const ls = this.state === 'walk' ? Math.sin(this.time * 12) * 8 : 0;
-        ctx.fillStyle = '#2c1810'; ctx.fillRect(5 - ls, 40, 8, 20); ctx.fillRect(17 + ls, 40, 8, 20);
-        ctx.fillStyle = '#2e5b1e'; ctx.fillRect(0, 15, 30, 30);
-        ctx.fillStyle = 'gold'; ctx.fillRect(11, 20, 8, 8);
-        ctx.fillStyle = '#1e3d14'; ctx.fillRect(2, 18, 6, 18);
-        ctx.fillStyle = '#1e3d14'; ctx.fillRect(22, 18, 6, 18);
-        ctx.fillStyle = '#ffccaa'; ctx.fillRect(22, 36, 6, 5);
-        ctx.fillStyle = '#bbb'; ctx.fillRect(25, 41, 3, 22);
-        ctx.fillStyle = '#c8a000'; ctx.fillRect(21, 39, 10, 3);
-        ctx.fillStyle = '#ffccaa'; ctx.fillRect(5, -5, 20, 20);
-        ctx.fillStyle = '#1a3a10'; ctx.fillRect(4, -8, 22, 10); ctx.fillRect(3, -5, 4, 8); ctx.fillRect(23, -5, 4, 8);
+        const ls = this.state === 'walk' ? Math.sin(this.time * 12) * 6 : 0;
+        ctx.fillStyle = '#2d2419'; ctx.fillRect(6 - ls, 42, 7, 16); ctx.fillRect(17 + ls, 42, 7, 16);
+        ctx.fillStyle = '#130f0a'; ctx.fillRect(5 - ls, 56, 9, 4); ctx.fillRect(16 + ls, 56, 9, 4);
+        ctx.fillStyle = '#244116'; ctx.fillRect(0, 18, 6, 17);
+        ctx.fillStyle = '#f1c6a3'; ctx.fillRect(1, 34, 5, 5);
+        ctx.fillStyle = '#2e5b1e';
+        ctx.beginPath();
+        ctx.moveTo(4, 16); ctx.lineTo(26, 16); ctx.lineTo(30, 40); ctx.lineTo(24, 44); ctx.lineTo(6, 44); ctx.lineTo(0, 40); ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#3b7426';
+        ctx.beginPath();
+        ctx.moveTo(11, 16); ctx.lineTo(19, 16); ctx.lineTo(22, 41); ctx.lineTo(8, 41); ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#d8b536';
+        ctx.beginPath(); ctx.moveTo(15, 21); ctx.lineTo(19, 25); ctx.lineTo(15, 29); ctx.lineTo(11, 25); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#5a4415'; ctx.fillRect(4, 39, 22, 4);
+        ctx.fillStyle = '#244116'; ctx.fillRect(24, 19, 5, 17);
+        ctx.fillStyle = '#f1c6a3'; ctx.fillRect(24, 34, 5, 5);
+        ctx.fillStyle = '#aeb4bc'; ctx.fillRect(25, 39, 3, 19);
+        ctx.fillStyle = '#d8b536'; ctx.fillRect(21, 39, 10, 3);
+        ctx.fillStyle = '#f4caab'; ctx.fillRect(12, 12, 6, 5);
+        ctx.beginPath(); ctx.ellipse(15, 2, 11, 12, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#9098a2';
+        ctx.beginPath();
+        ctx.moveTo(5, -3); ctx.lineTo(25, -3); ctx.lineTo(24, 7); ctx.lineTo(6, 7); ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#d0b34f'; ctx.fillRect(6, 2, 18, 3);
+        ctx.fillStyle = '#727b84'; ctx.fillRect(14, -3, 2, 12);
+        ctx.fillStyle = '#e2b18f';
+        ctx.beginPath(); ctx.ellipse(7, 3, 2, 3, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#2b1a12'; ctx.fillRect(15, -1, 3, 2); ctx.fillRect(20, 0, 2, 2);
+        ctx.fillStyle = '#ce9470'; ctx.fillRect(19, 3, 3, 3);
+        ctx.fillStyle = '#9a5f46'; ctx.fillRect(16, 7, 5, 1);
         ctx.restore();
         // Labels
         if (this.following) {
@@ -1334,7 +1468,7 @@ class Character {
     takeDamage(dmg) {
         if (this.invincibleTimer > 0) return;
         this.hp = Math.max(0, this.hp - dmg);
-        this.invincibleTimer = 1.2; this.hurtTimer = 0.3;
+        this.invincibleTimer = 1.2; this.hurtTimer = 0.3; triggerHitGlow(this, 0.3);
         sfx.playHurt();
     }
     update(dt, input) {
@@ -1390,28 +1524,45 @@ class Character {
 
     draw(ctx, cam) {
         const sx = this.x - cam.x, sy = this.y;
-        ctx.save();
-        // Hurt flash
-        if (this.hurtTimer > 0) ctx.globalAlpha = 0.5 + Math.sin(this.time * 40) * 0.5;
+        const flashAlpha = this.hurtTimer > 0 ? (0.5 + Math.sin(this.time * 40) * 0.5) : 1;
         const bspd = this.state === 'run' ? 20 : (this.state === 'walk' ? 12 : 2);
         const bamt = this.state === 'run' ? 6 : (this.state === 'walk' ? 3 : 1);
         const bob = Math.abs(Math.sin(this.time * bspd)) * bamt;
+        ctx.save();
+        // Hurt flash
+        if (this.hurtTimer > 0) ctx.globalAlpha = flashAlpha;
+        applyHitGlow(ctx, this, '255,214,120');
         ctx.translate(sx, sy - bob);
         if (!this.facingRight) { ctx.translate(30, 0); ctx.scale(-1, 1); }
 
         // Cape
-        ctx.fillStyle = '#c8102e'; ctx.beginPath(); ctx.moveTo(10, 15);
+        ctx.fillStyle = '#8c1123'; ctx.beginPath(); ctx.moveTo(11, 15);
         const fl = Math.sin(this.time * 15) * (this.state === 'run' ? 15 : (this.state === 'walk' ? 8 : 4));
-        ctx.lineTo(-22 - fl, 56); ctx.lineTo(-6 - fl, 60); ctx.lineTo(20, 15); ctx.fill();
+        ctx.lineTo(-22 - fl, 54); ctx.lineTo(-6 - fl, 60); ctx.lineTo(20, 17); ctx.fill();
+        ctx.fillStyle = '#c8102e';
+        ctx.beginPath(); ctx.moveTo(12, 17); ctx.lineTo(-16 - fl * 0.8, 53); ctx.lineTo(-2 - fl * 0.4, 57); ctx.lineTo(19, 18); ctx.fill();
         // Legs
-        const lg = this.state !== 'idle' && this.state !== 'action' ? Math.sin(this.time * 12) * 8 : (this.state === 'action' ? 5 : 0);
-        ctx.fillStyle = '#111'; ctx.fillRect(5 - lg, 40, 8, 20); ctx.fillRect(17 + lg, 40, 8, 20);
+        const lg = this.state !== 'idle' && this.state !== 'action' ? Math.sin(this.time * 12) * 7 : (this.state === 'action' ? 4 : 0);
+        ctx.fillStyle = '#2a211d'; ctx.fillRect(6 - lg, 42, 7, 16); ctx.fillRect(17 + lg, 42, 7, 16);
+        ctx.fillStyle = '#0f0d10'; ctx.fillRect(5 - lg, 56, 9, 4); ctx.fillRect(16 + lg, 56, 9, 4);
         // Body
-        ctx.fillStyle = '#2a5298'; ctx.fillRect(0, 15, 30, 30);
-        ctx.fillStyle = '#3e2723'; ctx.fillRect(-2, 35, 34, 5);
-        ctx.fillStyle = 'gold'; ctx.fillRect(10, 34, 7, 7);
+        ctx.fillStyle = '#19386c'; ctx.fillRect(0, 18, 6, 18);
+        ctx.fillStyle = '#f2c6a3'; ctx.fillRect(1, 34, 5, 6);
+        ctx.fillStyle = '#2a5298';
+        ctx.beginPath();
+        ctx.moveTo(4, 15); ctx.lineTo(26, 15); ctx.lineTo(30, 39); ctx.lineTo(24, 44); ctx.lineTo(6, 44); ctx.lineTo(0, 39); ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#3c6bbb';
+        ctx.beginPath();
+        ctx.moveTo(11, 15); ctx.lineTo(19, 15); ctx.lineTo(22, 41); ctx.lineTo(8, 41); ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#19386c'; ctx.fillRect(5, 18, 5, 11); ctx.fillRect(20, 18, 5, 11);
+        ctx.fillStyle = '#3e2723'; ctx.fillRect(4, 39, 22, 4);
+        ctx.fillStyle = '#d7b44a'; ctx.fillRect(8, 23, 14, 3);
+        ctx.fillStyle = '#e4c25c';
+        ctx.beginPath(); ctx.moveTo(15, 28); ctx.lineTo(19, 32); ctx.lineTo(15, 36); ctx.lineTo(11, 32); ctx.closePath(); ctx.fill();
         // Back arm
-        ctx.fillStyle = '#1a3070'; ctx.fillRect(-2, 15, 6, 18);
+        ctx.fillStyle = '#1a3070'; ctx.fillRect(0, 18, 6, 18);
 
         // FRONT ARM — weapon swing pivot from shoulder
         ctx.save();
@@ -1424,19 +1575,19 @@ class Character {
             ctx.rotate(angle);
             // Arm sleeve
             ctx.fillStyle = '#1e3c72'; ctx.fillRect(-3, 0, 8, 20);
-            ctx.fillStyle = '#ffccaa'; ctx.fillRect(-2, 20, 7, 7); // hand
+            ctx.fillStyle = '#f2c6a3'; ctx.fillRect(-2, 20, 7, 7); // hand
             if (this.weapon === 'sword') {
-                ctx.fillStyle = '#ccd8e0'; ctx.fillRect(0, 22, 5, 34);
-                ctx.fillStyle = '#e8f0ff'; ctx.fillRect(1, 22, 2, 34);
-                ctx.beginPath(); ctx.moveTo(0, 56); ctx.lineTo(2, 62); ctx.lineTo(5, 56); ctx.fill();
-                ctx.fillStyle = '#c8a000'; ctx.fillRect(-5, 20, 15, 4);
-                ctx.fillStyle = '#8b0000'; ctx.fillRect(0, 18, 5, 3);
+                ctx.fillStyle = '#ccd8e0'; ctx.fillRect(0, 22, 5, 32);
+                ctx.fillStyle = '#eef5ff'; ctx.fillRect(1, 22, 2, 32);
+                ctx.beginPath(); ctx.moveTo(0, 54); ctx.lineTo(2, 61); ctx.lineTo(5, 54); ctx.fill();
+                ctx.fillStyle = '#d7b44a'; ctx.fillRect(-6, 20, 16, 4);
+                ctx.fillStyle = '#7b1520'; ctx.fillRect(0, 18, 5, 3);
             } else if (this.weapon === 'axe') {
                 ctx.fillStyle = '#654321'; ctx.fillRect(0, 22, 4, 28);
-                ctx.fillStyle = '#bbb'; ctx.fillRect(4, 44, 16, 12);
-                ctx.fillStyle = '#999'; ctx.fillRect(-8, 44, 8, 12);
-                ctx.fillStyle = '#ddd';
-                ctx.beginPath(); ctx.moveTo(4, 44); ctx.lineTo(20, 50); ctx.lineTo(4, 56); ctx.fill();
+                ctx.fillStyle = '#adb2b8'; ctx.fillRect(4, 42, 16, 12);
+                ctx.fillStyle = '#8d949c'; ctx.fillRect(-8, 42, 8, 12);
+                ctx.fillStyle = '#dde1e4';
+                ctx.beginPath(); ctx.moveTo(4, 42); ctx.lineTo(20, 48); ctx.lineTo(4, 54); ctx.fill();
             } else if (this.weapon === 'hammer') {
                 ctx.fillStyle = '#3a2010'; ctx.fillRect(0, 22, 5, 40);
                 ctx.fillStyle = '#222'; ctx.fillRect(-15, 55, 35, 20);
@@ -1452,7 +1603,7 @@ class Character {
             ctx.fillRect(-3 + extendX * 0.3, 0 + extendY * 0.3, 8, 20);
             // Fist (closed hand, bigger when punching)
             const fistSize = 7 + punch * 4;
-            ctx.fillStyle = '#ffccaa';
+            ctx.fillStyle = '#f2c6a3';
             ctx.fillRect(-2 + extendX, 18 + extendY, fistSize, fistSize);
             // Knuckle lines when punching
             if (punch > 0.3) {
@@ -1470,10 +1621,23 @@ class Character {
         ctx.restore();
 
         // Head & Crown
-        ctx.fillStyle = '#ffccaa'; ctx.fillRect(5, -5, 20, 20);
+        ctx.fillStyle = '#f4caab';
+        ctx.beginPath(); ctx.ellipse(15, 2, 11, 12, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#8c6a3d';
+        ctx.beginPath();
+        ctx.moveTo(6, 0); ctx.quadraticCurveTo(8, -10, 15, -12); ctx.quadraticCurveTo(23, -10, 24, 1); ctx.lineTo(24, 6); ctx.lineTo(6, 6); ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#e2b18f';
+        ctx.beginPath(); ctx.ellipse(7, 3, 2, 3, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#2b1a12'; ctx.fillRect(15, -1, 3, 2); ctx.fillRect(20, 0, 2, 2);
+        ctx.fillStyle = '#ce9470'; ctx.fillRect(19, 3, 3, 3);
+        ctx.fillStyle = '#9a5f46'; ctx.fillRect(16, 7, 5, 1);
         ctx.fillStyle = '#ffbc00';
-        ctx.beginPath(); ctx.moveTo(4, -5); ctx.lineTo(4, -16); ctx.lineTo(10, -10); ctx.lineTo(15, -17); ctx.lineTo(20, -10); ctx.lineTo(26, -16); ctx.lineTo(26, -5); ctx.fill();
-        ctx.fillStyle = 'red'; ctx.fillRect(13, -13, 4, 4);
+        ctx.beginPath();
+        ctx.moveTo(5, -4); ctx.lineTo(7, -14); ctx.lineTo(11, -8); ctx.lineTo(15, -16); ctx.lineTo(19, -8); ctx.lineTo(23, -14); ctx.lineTo(25, -4); ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#ffe082'; ctx.fillRect(7, -4, 16, 3);
+        ctx.fillStyle = 'red'; ctx.fillRect(13, -11, 4, 4);
         ctx.restore();
     }
 }
@@ -1947,8 +2111,7 @@ class World {
         if (!hit) {
             for (const enemy of this.enemies) {
                 if (Math.abs(enemy.x - player.x) < 80) {
-                    enemy.hp -= player.weaponDmg; sfx.playHit();
-                    if (enemy.hp <= 0) { enemy.dead = true; enemy.die(this); }
+                    enemy.takeDamage(player.weaponDmg);
                     hit = true; break;
                 }
             }
