@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dragon Preview - New Designs</title>
+    <style>
+        body { background: #1a1a1a; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #fff; }
+        canvas { background: #222; box-shadow: 0 0 50px rgba(0,0,0,0.5); border-radius: 20px; border: 4px solid #333; }
+        .info { margin-top: 30px; text-align: center; max-width: 600px; }
+        .labels { display: flex; justify-content: space-around; width: 600px; margin-bottom: 10px; font-weight: bold; font-size: 1.2em; text-transform: uppercase; letter-spacing: 2px; }
+        .label.red { color: #e63946; }
+        .label.green { color: #52b788; }
+    </style>
+</head>
+<body>
+    <div class="labels">
+        <div class="label red">Red Chibi</div>
+        <div class="label green">Emerald Seedling</div>
+    </div>
+    <canvas id="canvas" width="800" height="400"></canvas>
+    <div class="info">
+        <p>Two distinct wingless, land-based dragon concepts. Both feature high-detail 2D vector styling with "waddle" walk animations.</p>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        let time = 0;
+
+        function drawRedDragon(ctx, x, y, time) {
+            ctx.save();
+            const bob = Math.sin(time * 5) * 5;
+            const legWalk = Math.sin(time * 8);
+            ctx.translate(x, y + bob);
+
+            const color = '#e63946';
+            const dark = '#1d3557';
+            const gold = '#ffd700';
+
+            // Legs
+            ctx.fillStyle = dark;
+            ctx.fillRect(10 + legWalk * 10, 30, 15, 25);
+            ctx.fillRect(60 - legWalk * 10, 30, 15, 25);
+            
+            // Tail
+            const tailWag = Math.sin(time * 4) * 15;
+            ctx.strokeStyle = color; ctx.lineWidth = 18; ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.moveTo(0, 20); ctx.quadraticCurveTo(-40, 10 + tailWag, -70, 40 + tailWag); ctx.stroke();
+            ctx.fillStyle = dark;
+            for(let i=1; i<4; i++) {
+                ctx.beginPath(); ctx.arc(-15*i, 20 + i*5 + tailWag*(i/4), 6, 0, Math.PI*2); ctx.fill();
+            }
+
+            // Body
+            const gr = ctx.createLinearGradient(0, 0, 0, 60);
+            gr.addColorStop(0, color); gr.addColorStop(1, '#900');
+            ctx.fillStyle = gr;
+            ctx.beginPath(); ctx.ellipse(40, 15, 55, 40, 0, 0, Math.PI * 2); ctx.fill();
+            // Belly
+            ctx.fillStyle = 'rgba(255,255,255,0.2)';
+            ctx.beginPath(); ctx.ellipse(45, 25, 35, 20, 0, 0, Math.PI * 2); ctx.fill();
+
+            // Front Legs
+            ctx.fillStyle = dark;
+            ctx.fillRect(25 - legWalk * 10, 40, 16, 25);
+            ctx.fillRect(75 + legWalk * 10, 40, 16, 25);
+
+            // Head
+            ctx.save();
+            ctx.translate(85, -5);
+            ctx.rotate(Math.sin(time * 4) * 0.1);
+            ctx.fillStyle = color; ctx.fillRect(-10, 0, 30, 30);
+            ctx.beginPath(); ctx.moveTo(0, -10); ctx.lineTo(60, 0); ctx.lineTo(60, 40); ctx.lineTo(0, 45); ctx.closePath(); ctx.fill();
+            // Horns
+            ctx.fillStyle = dark;
+            ctx.beginPath(); ctx.moveTo(10, -5); ctx.lineTo(15, -25); ctx.lineTo(25, -5); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(25, -2); ctx.lineTo(30, -20); ctx.lineTo(40, -2); ctx.fill();
+            // Eyes
+            ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(20, 15, 14, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = gold; ctx.globalAlpha = 0.8 + Math.sin(time * 10) * 0.2;
+            ctx.beginPath(); ctx.arc(20, 15, 11, 0, Math.PI * 2); ctx.fill();
+            ctx.globalAlpha = 1; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(23, 13, 4, 0, Math.PI * 2); ctx.fill();
+            ctx.restore();
+            ctx.restore();
+        }
+
+        function drawGreenDragon(ctx, x, y, time) {
+            ctx.save();
+            const bob = Math.sin(time * 3) * 6; // Slower bob
+            const legWalk = Math.sin(time * 5); // Slower waddle
+            ctx.translate(x, y + bob);
+
+            const color = '#2d6a4f';
+            const lighter = '#74c69d';
+            const brown = '#402a23';
+
+            // Legs
+            ctx.fillStyle = brown;
+            ctx.fillRect(10 + legWalk * 8, 30, 20, 25);
+            ctx.fillRect(60 - legWalk * 8, 30, 20, 25);
+            
+            // Tail
+            const tailWag = Math.sin(time * 2.5) * 20;
+            ctx.strokeStyle = color; ctx.lineWidth = 22; ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.moveTo(0, 20); ctx.quadraticCurveTo(-50, 20 + tailWag, -90, 50 + tailWag); ctx.stroke();
+            // Leaves on tail
+            ctx.fillStyle = lighter;
+            for(let i=1; i<5; i++) {
+                ctx.beginPath(); ctx.ellipse(-20*i, 20 + i*6 + tailWag*(i/4.5), 10, 5, 0.5, 0, Math.PI*2); ctx.fill();
+            }
+
+            // Body (More rounded)
+            const gr = ctx.createLinearGradient(0, 0, 0, 65);
+            gr.addColorStop(0, color); gr.addColorStop(1, '#081c15');
+            ctx.fillStyle = gr;
+            ctx.beginPath(); ctx.ellipse(45, 15, 65, 45, 0, 0, Math.PI * 2); ctx.fill();
+            // Mossy Top
+            ctx.fillStyle = lighter;
+            ctx.beginPath(); ctx.ellipse(45, -15, 40, 15, 0, 0, Math.PI * 2); ctx.fill();
+
+            // Front Legs
+            ctx.fillStyle = brown;
+            ctx.fillRect(20 - legWalk * 8, 45, 22, 25);
+            ctx.fillRect(80 + legWalk * 8, 45, 22, 25);
+
+            // Head (Wooden feel)
+            ctx.save();
+            ctx.translate(95, -10);
+            ctx.rotate(Math.sin(time * 3) * 0.15);
+            ctx.fillStyle = color; ctx.fillRect(-15, 0, 40, 35);
+            ctx.beginPath(); ctx.moveTo(0, -5); ctx.lineTo(65, 5); ctx.lineTo(65, 45); ctx.lineTo(0, 50); ctx.closePath(); ctx.fill();
+            // Branch Horns
+            ctx.strokeStyle = brown; ctx.lineWidth = 6; ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.moveTo(20, 0); ctx.lineTo(25, -30); ctx.moveTo(25, -15); ctx.lineTo(35, -25); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(40, 5); ctx.lineTo(48, -25); ctx.moveTo(48, -10); ctx.lineTo(58, -20); ctx.stroke();
+            // Big Gentle Eyes
+            ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(25, 18, 16, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#1b4332'; ctx.beginPath(); ctx.arc(25, 18, 12, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(30, 12, 5, 0, Math.PI * 2); ctx.fill(); // Shinie
+            ctx.restore();
+            ctx.restore();
+        }
+
+        function loop() {
+            ctx.clearRect(0,0,800,400);
+            
+            // Draw background platform
+            ctx.fillStyle = '#333';
+            ctx.fillRect(50, 300, 300, 10);
+            ctx.fillRect(450, 300, 300, 10);
+
+            drawRedDragon(ctx, 150, 230, time);
+            drawGreenDragon(ctx, 550, 220, time);
+            
+            time += 0.016;
+            requestAnimationFrame(loop);
+        }
+        loop();
+    </script>
+</body>
+</html>

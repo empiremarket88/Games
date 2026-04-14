@@ -1,0 +1,22 @@
+body, html {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background-color: #222; /* Dark background behind canvas */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+canvas {
+    background: linear-gradient(to bottom, #1e3c72 0%, #2a5298 100%); /* Night sky gradient like Kingdom */
+    /* Maintain pixel art sharpness */
+    image-rendering: -moz-crisp-edges;
+    image-rendering: -webkit-crisp-edges;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    box-shadow: 0 0 30px rgba(0, 0, 0, 0.8);
+}
