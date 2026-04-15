@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CYBER-REX: ELITE PRODUCTION PREVIEW</title>
+    <style>
+        :root {
+            --bg: #050507;
+            --neon: #00f5ff;
+            --neon-glow: rgba(0, 245, 255, 0.4);
+            --metal: #2c2c34;
+            --accent: #ff0054;
+        }
+
+        body {
+            background: var(--bg);
+            color: #fff;
+            margin: 0;
+            padding: 0;
+            font-family: 'Space Grotesk', 'Syncopate', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        .header {
+            position: absolute;
+            top: 40px;
+            text-align: center;
+            z-index: 10;
+        }
+
+        h1 {
+            font-size: 3rem;
+            margin: 0;
+            letter-spacing: 0.5em;
+            text-transform: uppercase;
+            font-weight: 900;
+            background: linear-gradient(90deg, #fff, var(--neon), #fff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: textPulse 4s infinite;
+        }
+
+        @keyframes textPulse {
+            0%, 100% { filter: drop-shadow(0 0 5px var(--neon-glow)); }
+            50% { filter: drop-shadow(0 0 20px var(--neon-glow)); }
+        }
+
+        .container {
+            position: relative;
+            background: radial-gradient(circle at center, #1a1a2e 0%, #050507 70%);
+            padding: 2px;
+            border-radius: 30px;
+            box-shadow: 0 0 100px rgba(0, 245, 255, 0.1);
+        }
+
+        canvas {
+            background: transparent;
+            border-radius: 28px;
+            display: block;
+        }
+
+        .footer {
+            position: absolute;
+            bottom: 40px;
+            display: flex;
+            gap: 40px;
+            font-size: 0.8rem;
+            letter-spacing: 0.2em;
+            color: #444;
+            text-transform: uppercase;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            background: var(--neon);
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--neon);
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>CYBER-REX</h1>
+        <p style="color: var(--neon); letter-spacing: 0.3em; margin-top: 5px;">TACTICAL BOSS UNIT // V2.5 ENHANCED</p>
+    </div>
+
+    <div class="container">
+        <canvas id="mainCanvas" width="1000" height="700"></canvas>
+    </div>
+
+    <div class="footer">
+        <div class="status-item"><div class="dot"></div> SYSTEMS ONLINE</div>
+        <div class="status-item">SCALE: 1.50X</div>
+        <div class="status-item">POWER: MAXIMIZED</div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('mainCanvas');
+        const ctx = canvas.getContext('2d');
+        let time = 0;
+
+        class CyberRex {
+            constructor() {
+                this.x = 500;
+                this.y = 450;
+                this.scale = 1.5;
+                this.colors = {
+                    plate: '#1e1e24',
+                    metal: '#4a4a58',
+                    lightMetal: '#888899',
+                    neon: '#00f5ff',
+                    glow: 'rgba(0, 245, 255, 0.5)',
+                    eye: '#ffea00',
+                    accent: '#ff0054'
+                };
+            }
+
+            draw(time) {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.scale(this.scale, this.scale);
+
+                const bob = Math.sin(time * 5) * 5;
+                const walk = Math.sin(time * 7);
+                const breath = Math.sin(time * 3);
+
+                this.drawShadow();
+                ctx.translate(0, bob);
+
+                this.drawBackLeg(walk);
+                this.drawTail(time);
+                this.drawBody(breath);
+                this.drawArms(time);
+                this.drawHead(time, breath);
+                this.drawFrontLeg(walk);
+
+                ctx.restore();
+            }
+
+            drawShadow() {
+                ctx.fillStyle = 'rgba(0,0,0,0.4)';
+                ctx.beginPath();
+                ctx.ellipse(0, 100, 150, 40, 0, 0, Math.PI*2);
+                ctx.fill();
+            }
+
+            drawBackLeg(walk) {
+                ctx.save();
+                ctx.translate(-20 - walk * 25, 30);
+                ctx.rotate(0.2 + walk * 0.4);
+
+                // Upper Leg (Thigh)
+                ctx.fillStyle = this.colors.plate;
+                ctx.beginPath();
+                ctx.roundRect(-25, -20, 50, 70, 15);
+                ctx.fill();
+                ctx.strokeStyle = this.colors.metal; ctx.lineWidth = 2; ctx.stroke();
+
+                // Hydraulic Piston 1
+                const pHeight = 20 + walk * 10;
+                ctx.fillStyle = this.colors.lightMetal;
+                ctx.fillRect(-10, 40, 4, pHeight);
+                ctx.fillStyle = this.colors.metal;
+                ctx.fillRect(-13, 40 + pHeight - 5, 10, 10);
+
+                // Lower Leg & Foot
+                ctx.translate(0, 50);
+                ctx.rotate(-0.4 - walk * 0.5);
+                ctx.fillStyle = this.colors.metal;
+                ctx.beginPath();
+                ctx.roundRect(-15, 0, 30, 60, [5, 5, 10, 10]);
+                ctx.fill();
+
+                // Talons
+                ctx.fillStyle = this.colors.lightMetal;
+                for(let i=0; i<3; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(-15 + i*15, 60); ctx.lineTo(-15 + i*15 + 10, 75); ctx.lineTo(-15 + i*15 + 20, 60);
+                    ctx.fill();
+                }
+
+                ctx.restore();
+            }
+
+            drawFrontLeg(walk) {
+                ctx.save();
+                ctx.translate(30 + walk * 25, 45);
+                ctx.rotate(-0.1 - walk * 0.4);
+
+                // Thigh
+                ctx.fillStyle = this.colors.plate;
+                ctx.beginPath();
+                ctx.roundRect(-30, -25, 60, 80, 20);
+                ctx.fill();
+                // Neon strip on thigh
+                ctx.strokeStyle = this.colors.neon; ctx.lineWidth = 4;
+                ctx.beginPath(); ctx.moveTo(-10, -5); ctx.lineTo(-10, 40); ctx.stroke();
+
+                // Piston
+                const pHeight = 25 - walk * 12;
+                ctx.fillStyle = this.colors.lightMetal;
+                ctx.fillRect(8, 50, 6, pHeight);
+
+                // Lower Leg
+                ctx.translate(0, 60);
+                ctx.rotate(0.2 + walk * 0.3);
+                ctx.fillStyle = this.colors.plate;
+                ctx.fillRect(-20, 0, 40, 65);
+                ctx.strokeStyle = this.colors.neon; ctx.lineWidth = 1; ctx.strokeRect(-20,0,40,65);
+
+                // Foot
+                ctx.fillStyle = this.colors.metal;
+                ctx.fillRect(-25, 65, 65, 15);
+                // Big metallic claws
+                ctx.fillStyle = this.colors.lightMetal;
+                for(let i=0; i<3; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(10 + i*18, 70); ctx.lineTo(35 + i*18, 85); ctx.lineTo(15 + i*18, 80);
+                    ctx.fill();
+                }
+
+                ctx.restore();
+            }
+
+            drawTail(time) {
+                const tailWag = Math.sin(time * 3) * 15;
+                let lastX = -35;
+                let lastY = 10;
+                
+                ctx.save();
+                for(let i=1; i<=7; i++) {
+                    const segmentRotate = (tailWag / 10) * (i / 7) - 0.2;
+                    ctx.translate(lastX, lastY);
+                    ctx.rotate(segmentRotate);
+                    
+                    // Segment plate
+                    ctx.fillStyle = this.colors.plate;
+                    const size = 45 - i * 5;
+                    ctx.beginPath(); ctx.roundRect(-size, -size/2, size, size, 5); ctx.fill();
+                    ctx.strokeStyle = this.colors.lightMetal; ctx.lineWidth = 1; ctx.stroke();
+                    
+                    // Internal Energy
+                    ctx.globalCompositeOperation = 'lighter';
+                    ctx.fillStyle = this.colors.neon;
+                    ctx.globalAlpha = 0.3 + Math.sin(time*10 + i)*0.3;
+                    ctx.fillRect(-5, -size/4, 2, size/2);
+                    ctx.globalAlpha = 1;
+                    ctx.globalCompositeOperation = 'source-over';
+
+                    lastX = -size + 5;
+                    lastY = 0;
+                }
+                ctx.restore();
+            }
+
+            drawBody(breath) {
+                ctx.save();
+                // Layered Armor Plating
+                const bodyGrad = ctx.createLinearGradient(0, -60, 0, 60);
+                bodyGrad.addColorStop(0, '#2c2c34');
+                bodyGrad.addColorStop(1, '#0a0a0d');
+                ctx.fillStyle = bodyGrad;
+                
+                // Base structure
+                ctx.beginPath();
+                ctx.ellipse(15, 0, 60, 95, 0.4, 0, Math.PI*2);
+                ctx.fill();
+
+                // Detailed Plates
+                ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.ellipse(15, -20, 50, 40, 0.4, 0, Math.PI*2); ctx.stroke();
+                ctx.beginPath(); ctx.ellipse(15, 20, 45, 45, 0.4, 0, Math.PI*2); ctx.stroke();
+
+                // Energy Conduits (Cables)
+                ctx.strokeStyle = this.colors.neon; ctx.lineWidth = 2;
+                ctx.globalAlpha = 0.6 + breath * 0.4;
+                ctx.beginPath(); ctx.moveTo(-5, -40); ctx.quadraticCurveTo(20, -50, 35, -20); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(30, -10, 45, 20); ctx.stroke();
+                
+                // Rivets/Bolts
+                ctx.fillStyle = '#000';
+                for(let i=0; i<5; i++) {
+                    ctx.beginPath(); ctx.arc(10 + i*5, -30 + i*15, 2, 0, Math.PI*2); ctx.fill();
+                }
+                ctx.restore();
+            }
+
+            drawArms(time) {
+                const armWave = Math.sin(time * 6) * 12;
+                ctx.save();
+                ctx.translate(50, -10 + armWave);
+                
+                // Upper arm
+                ctx.strokeStyle = this.colors.metal; ctx.lineWidth = 12; ctx.lineCap = 'round';
+                ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(30, 20); ctx.stroke();
+                
+                // Forearm
+                ctx.translate(30, 20);
+                ctx.rotate(0.5 + Math.sin(time*8)*0.2);
+                ctx.strokeStyle = this.colors.lightMetal; ctx.lineWidth = 8;
+                ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(40, -10); ctx.stroke();
+                
+                // Detailed Multi-Claw
+                ctx.fillStyle = this.colors.lightMetal;
+                for(let i=0; i<3; i++) {
+                    ctx.save();
+                    ctx.translate(40, -10);
+                    ctx.rotate(-0.5 + i*0.5);
+                    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(15, 0); ctx.lineTo(12, 5); ctx.closePath(); ctx.fill();
+                    ctx.restore();
+                }
+                
+                // Claw energy
+                ctx.fillStyle = this.colors.neon; ctx.globalAlpha = 0.5;
+                ctx.beginPath(); ctx.arc(40, -10, 5, 0, Math.PI*2); ctx.fill();
+                ctx.restore();
+            }
+
+            drawHead(time, breath) {
+                const headNod = Math.sin(time * 4) * 0.12;
+                ctx.save();
+                ctx.translate(65, -85);
+                ctx.rotate(headNod);
+
+                // --- Armor Shell ---
+                ctx.fillStyle = this.colors.plate;
+                ctx.beginPath();
+                ctx.roundRect(-20, -35, 110, 75, [10, 40, 25, 10]);
+                ctx.fill();
+                ctx.strokeStyle = this.colors.metal; ctx.lineWidth = 2; ctx.stroke();
+
+                // Panel lines
+                ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+                ctx.beginPath(); ctx.moveTo(10, -35); ctx.lineTo(30, 40); ctx.stroke();
+                
+                // --- TACTICAL VISOR (EYE) ---
+                // Outer glow
+                ctx.shadowBlur = 15; ctx.shadowColor = this.colors.neon;
+                ctx.fillStyle = '#0a0a0a';
+                ctx.fillRect(15, -12, 65, 18);
+                
+                // Internal scanning effect
+                ctx.shadowBlur = 0;
+                const scanX = 15 + ((time * 80) % 65);
+                ctx.fillStyle = this.colors.neon; ctx.globalAlpha = 0.8;
+                ctx.fillRect(scanX, -12, 4, 18);
+                
+                // Lenses
+                ctx.fillStyle = this.colors.accent; ctx.globalAlpha = 0.9;
+                ctx.beginPath(); ctx.arc(20, -3, 4, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(21, -4, 1.5, 0, Math.PI*2); ctx.fill();
+
+                // --- TEETH (CHROME SERRATED) ---
+                ctx.globalAlpha = 1;
+                ctx.fillStyle = '#d1d1d1';
+                const jawDrop = 5 + Math.sin(time * 12) * 4;
+                // Top Teeth
+                for(let i=0; i<8; i++) {
+                    ctx.beginPath(); 
+                    ctx.moveTo(15 + i*10, 10); ctx.lineTo(20 + i*10, 25); ctx.lineTo(25 + i*10, 10);
+                    ctx.fill();
+                }
+                // Lower Jaw (separate)
+                ctx.fillStyle = this.colors.plate;
+                ctx.save();
+                ctx.translate(10, 30 + jawDrop);
+                ctx.beginPath(); ctx.roundRect(0, 0, 70, 15, [2, 10, 10, 2]); ctx.fill();
+                // Bottom Teeth
+                ctx.fillStyle = '#888';
+                for(let i=0; i<7; i++) {
+                    ctx.beginPath(); 
+                    ctx.moveTo(5 + i*10, 0); ctx.lineTo(10 + i*10, -10); ctx.lineTo(15 + i*10, 0);
+                    ctx.fill();
+                }
+                ctx.restore();
+
+                // --- HEAT SINK / EXHAUST ---
+                ctx.fillStyle = '#111';
+                ctx.fillRect(-15, -15, 10, 30);
+                if (breath > 0.7) {
+                    // Steam particles
+                    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+                    for(let i=0; i<3; i++) {
+                        ctx.beginPath(); ctx.arc(-25 - i*10, -10 + Math.sin(time*20)*5, 8 * breath, 0, Math.PI*2); ctx.fill();
+                    }
+                }
+
+                // --- PLASMA CHARGE ---
+                ctx.globalCompositeOperation = 'lighter';
+                const pulse = 30 + breath * 15;
+                const pGrad = ctx.createRadialGradient(100, 10, 5, 100, 10, pulse);
+                pGrad.addColorStop(0, '#fff');
+                pGrad.addColorStop(0.2, this.colors.neon);
+                pGrad.addColorStop(1, 'transparent');
+                ctx.fillStyle = pGrad;
+                ctx.beginPath(); ctx.arc(100, 10, pulse, 0, Math.PI*2); ctx.fill();
+                
+                // Lightning arcs
+                ctx.strokeStyle = this.colors.neon; ctx.lineWidth = 1;
+                for(let i=0; i<3; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(100, 10);
+                    const ang = Math.random() * Math.PI * 2;
+                    ctx.lineTo(100 + Math.cos(ang)*pulse, 10 + Math.sin(ang)*pulse);
+                    ctx.stroke();
+                }
+                
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.restore();
+            }
+        }
+
+        const rex = new CyberRex();
+
+        function drawEnvironment() {
+            // Subtle Grid
+            ctx.strokeStyle = 'rgba(0, 245, 255, 0.05)';
+            ctx.lineWidth = 1;
+            for(let x=0; x<canvas.width; x+=50) {
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+            }
+            for(let y=0; y<canvas.height; y+=50) {
+                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+            }
+            
+            // Floor light
+            const fGrad = ctx.createRadialGradient(500, 550, 0, 500, 550, 400);
+            fGrad.addColorStop(0, 'rgba(0, 245, 255, 0.1)');
+            fGrad.addColorStop(1, 'transparent');
+            ctx.fillStyle = fGrad;
+            ctx.fillRect(0, 400, 1000, 300);
+        }
+
+        function loop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawEnvironment();
+            rex.draw(time);
+            time += 0.016;
+            requestAnimationFrame(loop);
+        }
+
+        loop();
+    </script>
+</body>
+</html>

@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>T-REX BOSS - Concept Gallery</title>
+    <style>
+        :root {
+            --bg: #0a0a0c;
+            --card-bg: #16161a;
+            --text: #e0e0e6;
+            --v1-color: #9d4edd;
+            --v2-color: #00f5ff;
+            --v3-color: #ff4d00;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 40px;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 40px;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            background: linear-gradient(to right, var(--v1-color), var(--v2-color), var(--v3-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 900;
+        }
+
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 30px;
+            width: 100%;
+            max-width: 1400px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 24px;
+            padding: 20px;
+            border: 1px solid rgba(255,255,255,0.05);
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        .card:hover {
+            transform: translateY(-10px);
+            border-color: rgba(255,255,255,0.1);
+        }
+
+        canvas {
+            width: 100%;
+            height: 350px;
+            background: #000;
+            border-radius: 16px;
+            margin-bottom: 20px;
+        }
+
+        .info {
+            padding: 0 10px;
+        }
+
+        .info h2 {
+            margin: 0 0 10px 0;
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .info p {
+            color: #a0a0aa;
+            font-size: 0.95rem;
+            line-height: 1.6;
+            margin: 0;
+        }
+
+        .badge {
+            font-size: 0.7rem;
+            padding: 4px 10px;
+            border-radius: 100px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            font-weight: 800;
+        }
+
+        .v1 .badge { background: rgba(157, 78, 221, 0.2); color: var(--v1-color); }
+        .v2 .badge { background: rgba(0, 245, 255, 0.2); color: var(--v2-color); }
+        .v3 .badge { background: rgba(255, 77, 0, 0.2); color: var(--v3-color); }
+
+        /* Effects */
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 4px;
+        }
+        .v1::before { background: var(--v1-color); }
+        .v2::before { background: var(--v2-color); }
+        .v3::before { background: var(--v3-color); }
+
+        .back-link {
+            margin-top: 50px;
+            color: #666;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+        .back-link:hover { color: #fff; }
+    </style>
+</head>
+<body>
+
+    <h1>REDRAW CONCEPTS</h1>
+
+    <div class="gallery">
+        <!-- V1: Shadow Stalker -->
+        <div class="card v1">
+            <canvas id="canvasV1" width="500" height="400"></canvas>
+            <div class="info">
+                <h2>Shadow Stalker <span class="badge">V1</span></h2>
+                <p>Lean, lethal, and supernatural. This design uses sharp peaks and bioluminescent violet energy. Features a high-speed waddle and glowing essence fireball.</p>
+            </div>
+        </div>
+
+        <!-- V2: Cyber-Rex -->
+        <div class="card v2">
+            <canvas id="canvasV2" width="500" height="400"></canvas>
+            <div class="info">
+                <h2>Cyber-Rex <span class="badge">V2</span></h2>
+                <p>Industrial dominance. A mechanical beast with gunmetal plating and neon cyan circuits. Uses robotic limb movement and a concentrated plasma charge.</p>
+            </div>
+        </div>
+
+        <!-- V3: Obsidian Ravager -->
+        <div class="card v3">
+            <canvas id="canvasV3" width="500" height="400"></canvas>
+            <div class="info">
+                <h2>Obsidian Ravager <span class="badge">V3</span></h2>
+                <p>Earthen power. A massive brute forged from volcanic rock and internal magma. Features a heavy-weight trudge and a bubbling lava pulse.</p>
+            </div>
+        </div>
+    </div>
+
+    <a href="#" class="back-link">Select a design to proceed</a>
+
+    <script>
+        const cards = [
+            { id: 'canvasV1', type: 'shadow' },
+            { id: 'canvasV2', type: 'cyber' },
+            { id: 'canvasV3', type: 'magma' }
+        ];
+
+        class TRex {
+            constructor(canvasId, type) {
+                this.canvas = document.getElementById(canvasId);
+                this.ctx = this.canvas.getContext('2d');
+                this.type = type;
+                this.time = 0;
+            }
+
+            draw() {
+                const { ctx, canvas, time, type } = this;
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                ctx.save();
+                ctx.translate(canvas.width / 2, canvas.height / 2 + 50);
+
+                // Common Animation Variables
+                const bob = Math.sin(time * 6) * 6;
+                const walkCycle = Math.sin(time * 8);
+                const breathing = Math.sin(time * 3);
+
+                if (type === 'shadow') this.drawShadowRex(ctx, bob, walkCycle, breathing);
+                if (type === 'cyber') this.drawCyberRex(ctx, bob, walkCycle, breathing);
+                if (type === 'magma') this.drawMagmaRex(ctx, bob, walkCycle, breathing);
+
+                ctx.restore();
+                this.time += 0.016;
+            }
+
+            drawShadowRex(ctx, bob, leg, breath) {
+                const headNod = Math.sin(this.time * 4) * 0.1;
+                const tailWag = Math.sin(this.time * 3) * 10;
+                
+                // Colors
+                const base = '#1a0d26';
+                const mid = '#3c096c';
+                const glow = '#9d4edd';
+                const eye = '#ff0054';
+
+                ctx.translate(0, bob);
+
+                // --- Back Leg ---
+                ctx.fillStyle = base;
+                ctx.save();
+                ctx.translate(-15 - leg * 20, 20);
+                ctx.rotate(0.2 + leg * 0.3);
+                ctx.beginPath(); ctx.ellipse(0, 0, 15, 30, 0, 0, Math.PI*2); ctx.fill();
+                ctx.restore();
+
+                // --- Tail ---
+                ctx.strokeStyle = mid; ctx.lineWidth = 20; ctx.lineCap = 'round';
+                ctx.beginPath(); ctx.moveTo(-30, 0); ctx.quadraticCurveTo(-80, -20 + tailWag, -120, 10 + tailWag*1.5); ctx.stroke();
+                // Spikes on tail
+                ctx.fillStyle = base;
+                for(let i=0; i<5; i++) {
+                    ctx.beginPath(); ctx.moveTo(-40 - i*15, -5 + i*3 + tailWag*(i/5)); ctx.lineTo(-45 - i*15, -20 + i*3 + tailWag*(i/5)); ctx.lineTo(-50 - i*15, -5 + i*3 + tailWag*(i/5)); ctx.fill();
+                }
+
+                // --- Body ---
+                const grad = ctx.createLinearGradient(0, -40, 0, 40);
+                grad.addColorStop(0, mid); grad.addColorStop(1, base);
+                ctx.fillStyle = grad;
+                ctx.beginPath(); ctx.ellipse(10, 0, 40, 55, 0.3, 0, Math.PI*2); ctx.fill();
+                
+                // Glow marks
+                ctx.strokeStyle = glow; ctx.lineWidth = 2; ctx.globalAlpha = 0.5 + breath * 0.3;
+                ctx.beginPath(); ctx.moveTo(0, -20); ctx.lineTo(15, -10); ctx.moveTo(5, 5); ctx.lineTo(25, 15); ctx.stroke();
+                ctx.globalAlpha = 1;
+
+                // --- Claws ---
+                ctx.fillStyle = glow;
+                const armBob = Math.sin(this.time * 5) * 5;
+                ctx.fillRect(40, -5 + armBob, 12, 4); // Arms
+                ctx.beginPath(); ctx.moveTo(52, -5+armBob); ctx.lineTo(58, -8+armBob); ctx.lineTo(52, -1+armBob); ctx.fill(); // Claws
+
+                // --- Head ---
+                ctx.save();
+                ctx.translate(35, -50);
+                ctx.rotate(headNod);
+                // Main head shape
+                ctx.fillStyle = mid;
+                ctx.beginPath(); ctx.moveTo(-10, 0); ctx.lineTo(50, 10); ctx.lineTo(40, 35); ctx.lineTo(-5, 30); ctx.closePath(); ctx.fill();
+                ctx.fillStyle = base;
+                ctx.beginPath(); ctx.ellipse(20, 5, 35, 12, 0.2, 0, Math.PI*2); ctx.fill();
+                // Teeth
+                ctx.fillStyle = '#fff';
+                for(let i=0; i<5; i++) {
+                    ctx.beginPath(); ctx.moveTo(15+i*7, 18+i*1.5); ctx.lineTo(18+i*7, 28+i*1.5); ctx.lineTo(21+i*7, 19+i*1.5); ctx.fill();
+                }
+                // Eye
+                ctx.fillStyle = eye;
+                ctx.beginPath(); ctx.arc(10, 10, 5, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(12, 8, 1.5, 0, Math.PI*2); ctx.fill();
+                // Fireball
+                ctx.globalCompositeOperation = 'lighter';
+                const fSize = 25 + Math.sin(this.time*20)*5;
+                const fGrad = ctx.createRadialGradient(65, 25, 5, 65, 25, fSize);
+                fGrad.addColorStop(0, glow); fGrad.addColorStop(1, 'transparent');
+                ctx.fillStyle = fGrad;
+                ctx.beginPath(); ctx.arc(65, 25, fSize, 0, Math.PI*2); ctx.fill();
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.restore();
+
+                // --- Front Leg ---
+                ctx.fillStyle = mid;
+                ctx.save();
+                ctx.translate(15 + leg * 20, 25);
+                ctx.rotate(-0.1 - leg * 0.3);
+                ctx.beginPath(); ctx.ellipse(0, 0, 18, 35, 0, 0, Math.PI*2); ctx.fill();
+                ctx.restore();
+            }
+
+            drawCyberRex(ctx, bob, leg, breath) {
+                const headNod = Math.sin(this.time * 3) * 0.08;
+                const tailWag = Math.sin(this.time * 2) * 5;
+                
+                const plate = '#242426';
+                const metal = '#454550';
+                const neon = '#00f5ff';
+                const darkNeon = '#0077b6';
+
+                ctx.translate(0, bob);
+
+                // --- Back Leg ---
+                ctx.fillStyle = metal;
+                ctx.fillRect(-25 - leg * 15, 20, 20, 40);
+                ctx.fillStyle = neon; ctx.globalAlpha = 0.5 + breath * 0.5;
+                ctx.fillRect(-15 - leg * 15, 25, 3, 30);
+                ctx.globalAlpha = 1;
+
+                // --- Tail ---
+                ctx.strokeStyle = plate; ctx.lineWidth = 15;
+                ctx.beginPath(); ctx.moveTo(-30, 0); ctx.lineTo(-100, -10 + tailWag); ctx.stroke();
+                // Energy vents on tail
+                for(let i=0; i<3; i++) {
+                    ctx.fillStyle = neon;
+                    ctx.fillRect(-50 - i*20, -15 + i*2 + tailWag*(i/3), 10, 4);
+                }
+
+                // --- Body ---
+                ctx.fillStyle = plate;
+                ctx.beginPath(); ctx.roundRect(-30, -50, 80, 100, 20); ctx.fill();
+                // Circuits
+                ctx.strokeStyle = neon; ctx.lineWidth = 1;
+                ctx.strokeRect(-20, -40, 60, 80);
+                ctx.beginPath(); ctx.moveTo(0, -40); ctx.lineTo(0, 40); ctx.moveTo(-20, 0); ctx.lineTo(40, 0); ctx.stroke();
+
+                // --- Mechanical Arms ---
+                ctx.strokeStyle = metal; ctx.lineWidth = 6;
+                const armAnim = Math.sin(this.time * 6) * 10;
+                ctx.beginPath(); ctx.moveTo(40, -10); ctx.lineTo(60, armAnim); ctx.lineTo(75, -5 + armAnim); ctx.stroke();
+                ctx.fillStyle = neon; ctx.beginPath(); ctx.arc(75, -5 + armAnim, 3, 0, Math.PI*2); ctx.fill();
+
+                // --- Head ---
+                ctx.save();
+                ctx.translate(50, -45);
+                ctx.rotate(headNod);
+                // Head shell
+                ctx.fillStyle = metal;
+                ctx.beginPath(); ctx.roundRect(-10, -20, 70, 45, [5, 20, 20, 5]); ctx.fill();
+                // Visor
+                ctx.fillStyle = neon; ctx.globalAlpha = 0.8 + breath * 0.2;
+                ctx.fillRect(10, -5, 50, 8);
+                ctx.globalAlpha = 1;
+                // Steam puff (animation)
+                if (breath > 0.8) {
+                    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+                    ctx.beginPath(); ctx.arc(60, 40, 10 * breath, 0, Math.PI*2); ctx.fill();
+                }
+                // Plasma Charge
+                ctx.globalCompositeOperation = 'lighter';
+                const pulse = 20 + breath * 10;
+                ctx.fillStyle = neon;
+                ctx.beginPath(); ctx.arc(80, 5, 2, 0, Math.PI*2); ctx.fill();
+                ctx.strokeStyle = neon; ctx.lineWidth = 1;
+                ctx.beginPath(); ctx.arc(80, 5, pulse, 0, Math.PI*2); ctx.stroke();
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.restore();
+
+                // --- Front Leg ---
+                ctx.fillStyle = plate;
+                ctx.fillRect(10 + leg * 15, 30, 25, 45);
+                ctx.strokeStyle = neon; ctx.strokeRect(10+leg*15, 30, 25, 45);
+            }
+
+            drawMagmaRex(ctx, bob, leg, breath) {
+                const headNod = Math.sin(this.time * 2) * 0.15;
+                const tailWag = Math.sin(this.time * 1.5) * 8;
+                
+                const rock = '#1a1a1a';
+                const lava = '#ff4d00';
+                const heat = '#ff8c00';
+
+                ctx.translate(0, bob);
+
+                // --- Legs ---
+                ctx.fillStyle = rock;
+                // Back
+                ctx.beginPath(); ctx.ellipse(-20 - leg * 10, 30, 25, 40, 0, 0, Math.PI*2); ctx.fill();
+                // Front
+                ctx.beginPath(); ctx.ellipse(25 + leg * 10, 40, 30, 50, 0, 0, Math.PI*2); ctx.fill();
+                // Lava in cracks
+                ctx.fillStyle = lava; ctx.globalAlpha = 0.5 + breath * 0.5;
+                ctx.fillRect(-22-leg*10, 40, 4, 20);
+                ctx.fillRect(23+leg*10, 50, 5, 25);
+                ctx.globalAlpha = 1;
+
+                // --- Tail ---
+                ctx.fillStyle = rock;
+                ctx.beginPath(); 
+                ctx.moveTo(-30, 10); ctx.quadraticCurveTo(-100, -30 + tailWag, -140, 20 + tailWag);
+                ctx.lineTo(-135, 30 + tailWag); ctx.quadraticCurveTo(-90, -10 + tailWag, -30, 30);
+                ctx.closePath(); ctx.fill();
+
+                // --- Body ---
+                ctx.fillStyle = rock;
+                ctx.beginPath(); ctx.ellipse(0, 0, 60, 75, 0.4, 0, Math.PI*2); ctx.fill();
+                // Lava core
+                const lGrad = ctx.createRadialGradient(20, 0, 5, 20, 0, 50);
+                lGrad.addColorStop(0, lava); lGrad.addColorStop(1, 'transparent');
+                ctx.fillStyle = lGrad; ctx.globalAlpha = 0.3 + breath * 0.3;
+                ctx.beginPath(); ctx.ellipse(25, 0, 30, 55, 0.4, 0, Math.PI*2); ctx.fill();
+                ctx.globalAlpha = 1;
+
+                // --- Head ---
+                ctx.save();
+                ctx.translate(45, -60);
+                ctx.rotate(headNod);
+                ctx.fillStyle = rock;
+                // Massive jaw
+                ctx.beginPath(); ctx.ellipse(20, 10, 45, 25, 0, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.ellipse(25, -20, 40, 20, 0.1, 0, Math.PI*2); ctx.fill();
+                // Glowing eyes
+                ctx.fillStyle = heat;
+                ctx.beginPath(); ctx.ellipse(10, -15, 8, 4, -0.2, 0, Math.PI*2); ctx.fill();
+                // Magma fireball
+                ctx.globalCompositeOperation = 'screen';
+                const mSize = 35 + Math.sin(this.time*15)*8;
+                const mGrad = ctx.createRadialGradient(70, 0, 2, 70, 0, mSize);
+                mGrad.addColorStop(0, '#fff'); mGrad.addColorStop(0.3, heat); mGrad.addColorStop(0.7, lava); mGrad.addColorStop(1, 'transparent');
+                ctx.fillStyle = mGrad;
+                ctx.beginPath(); ctx.arc(70, 0, mSize, 0, Math.PI*2); ctx.fill();
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.restore();
+
+                // Tiny hands
+                ctx.fillStyle = rock;
+                ctx.fillRect(45, -5, 15, 8);
+                ctx.fillStyle = lava; ctx.fillRect(58, -5, 5, 5);
+            }
+        }
+
+        const instances = cards.map(c => new TRex(c.id, c.type));
+
+        function animate() {
+            instances.forEach(i => i.draw());
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+    </script>
+</body>
+</html>

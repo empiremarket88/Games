@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monarch Deer - Design Gallery</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0a0a0c;
+            --accent: #d4b798;
+            --card-bg: #16161a;
+            --text: #e0e0e6;
+        }
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Outfit', sans-serif;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        header {
+            text-align: center;
+            padding: 60px 20px;
+            max-width: 800px;
+        }
+        h1 {
+            font-size: 3rem;
+            margin: 0;
+            background: linear-gradient(135deg, #fff 0%, var(--accent) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -1px;
+        }
+        p {
+            opacity: 0.7;
+            font-weight: 300;
+            line-height: 1.6;
+        }
+        .gallery {
+            display: flex;
+            gap: 30px;
+            padding: 40px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .card {
+            background: var(--card-bg);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 24px;
+            padding: 30px;
+            width: 320px;
+            text-align: center;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+        .card:hover {
+            transform: translateY(-10px);
+            border-color: var(--accent);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+        }
+        canvas {
+            background: rgba(0,0,0,0.2);
+            border-radius: 16px;
+            margin-bottom: 20px;
+        }
+        .tag {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--accent);
+            margin-bottom: 10px;
+            display: block;
+        }
+        h2 {
+            margin: 0 0 10px 0;
+            font-size: 1.5rem;
+        }
+        .desc {
+            font-size: 0.9rem;
+            opacity: 0.6;
+            margin-bottom: 20px;
+        }
+        .btn {
+            background: var(--accent);
+            color: #000;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        .btn:hover { opacity: 0.9; }
+        
+        .badge {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: #222;
+            padding: 4px 12px;
+            border-radius: 100px;
+            font-size: 0.7rem;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <span class="tag">Animal Redesign Phase</span>
+    <h1>The Monarch Deer</h1>
+    <p>Reimagining the forest inhabitants with anatomical precision, jointed movement, and high-fidelity aesthetics. Choose your favorite direction.</p>
+</header>
+
+<div class="gallery">
+    <!-- CHOICE A -->
+    <div class="card" onclick="alert('You selected Choice A!')">
+        <div class="badge">Anatomical</div>
+        <canvas id="canvasA" width="260" height="200"></canvas>
+        <span class="tag">Choice A</span>
+        <h2>The Royal Stag</h2>
+        <p class="desc">Powerful chest, majestic branching antlers, and a regal, high-step gait. Designed for dominance.</p>
+        <button class="btn">Select Design</button>
+    </div>
+
+    <!-- CHOICE B -->
+    <div class="card" onclick="alert('You selected Choice B!')">
+        <div class="badge">Agile</div>
+        <canvas id="canvasB" width="260" height="200"></canvas>
+        <span class="tag">Choice B</span>
+        <h2>The Swift Springer</h2>
+        <p class="desc">Slender limbs, white-spotted hide, and lightning-fast joint response. Built for speed.</p>
+        <button class="btn">Select Design</button>
+    </div>
+
+    <!-- CHOICE C -->
+    <div class="card" onclick="alert('You selected Choice C!')">
+        <div class="badge">Rugged</div>
+        <canvas id="canvasC" width="260" height="200"></canvas>
+        <span class="tag">Choice C</span>
+        <h2>Highland Guardian</h2>
+        <p class="desc">Shaggy fur details, wide-set antlers, and a sturdy, ground-hugging physique. Built for endurance.</p>
+        <button class="btn">Select Design</button>
+    </div>
+</div>
+
+<script>
+    const configs = {
+        A: { color: '#5d3a1a', antlerColor: '#d4b798', points: 8, spots: false, shaggy: false, legW: 4 },
+        B: { color: '#a67c52', antlerColor: '#c5a381', points: 3, spots: true, shaggy: false, legW: 2.5 },
+        C: { color: '#4a3625', antlerColor: '#8b7355', points: 5, spots: false, shaggy: true, legW: 5 }
+    };
+
+    function drawDeer(ctx, time, config) {
+        const cx = 130, cy = 140;
+        const walk = Math.sin(time * 6);
+        const bob = Math.abs(Math.sin(time * 6)) * 5;
+        
+        ctx.clearRect(0,0,260,200);
+        ctx.save();
+        ctx.translate(cx, cy - bob);
+
+        // --- 1. LEGS (REAR) ---
+        drawLeg(ctx, -15, 0, walk, config.legW, config.color);
+        drawLeg(ctx, 15, 0, -walk, config.legW, config.color);
+
+        // --- 2. BODY (Anatomical) ---
+        ctx.fillStyle = config.color;
+        ctx.beginPath();
+        // The Back & Rump
+        ctx.moveTo(-25, 0);
+        ctx.bezierCurveTo(-35, -20, -10, -35, 10, -30); // Back
+        ctx.bezierCurveTo(30, -25, 35, -5, 25, 5);      // Chest/Neck transition
+        ctx.lineTo(25, 10);
+        ctx.bezierCurveTo(15, 15, -15, 15, -25, 5);    // Belly
+        ctx.closePath();
+        ctx.fill();
+
+        // Optional Spots
+        if (config.spots) {
+            ctx.fillStyle = 'rgba(255,255,255,0.4)';
+            for(let i=0; i<5; i++) {
+                ctx.beginPath(); ctx.arc(-10 + i*5, -20, 2, 0, Math.PI*2); ctx.fill();
+            }
+        }
+        
+        // Shaggy Detail
+        if (config.shaggy) {
+            ctx.strokeStyle = config.color;
+            ctx.lineWidth = 2;
+            for(let i=0; i<10; i++) {
+                ctx.beginPath(); ctx.moveTo(-20+i*4, 12); ctx.lineTo(-22+i*4, 18); ctx.stroke();
+            }
+        }
+
+        // --- 3. NECK & HEAD ---
+        ctx.save();
+        ctx.translate(22, -18);
+        ctx.rotate(Math.sin(time * 2) * 0.1); // Neck idle sway
+        
+        // Neck
+        ctx.beginPath();
+        ctx.moveTo(0,0); ctx.quadraticCurveTo(5, -15, 12, -22);
+        ctx.lineTo(2, -28); ctx.quadraticCurveTo(-5, -15, -8, 5);
+        ctx.fill();
+
+        // Head
+        ctx.translate(10, -26);
+        ctx.beginPath(); ctx.ellipse(0, 0, 10, 6, 0.4, 0, Math.PI*2); ctx.fill();
+        
+        // Ear
+        ctx.beginPath(); ctx.ellipse(-4, -4, 5, 2, -0.8, 0, Math.PI*2); ctx.fill();
+        
+        // Eye
+        ctx.fillStyle = '#111';
+        ctx.beginPath(); ctx.arc(3, -1, 1.5, 0, Math.PI*2); ctx.fill();
+
+        // Antlers
+        ctx.strokeStyle = config.antlerColor;
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        for(let i=0; i<2; i++) {
+            const side = i === 0 ? 1 : -1;
+            ctx.save();
+            ctx.translate(-2, -4);
+            ctx.beginPath();
+            ctx.moveTo(0,0);
+            ctx.lineTo(side * 5, -15);
+            // Branches
+            for(let p=0; p < config.points; p++) {
+                ctx.moveTo(side * (2 + p*1), -5 - p*3);
+                ctx.lineTo(side * (10 + p*2), -10 - p*5);
+            }
+            ctx.stroke();
+            ctx.restore();
+        }
+        ctx.restore();
+
+        // --- 4. LEGS (FRONT) ---
+        drawLeg(ctx, -10, 0, -walk * 0.8, config.legW, config.color);
+        drawLeg(ctx, 20, 0, walk * 0.8, config.legW, config.color);
+
+        ctx.restore();
+    }
+
+    function drawLeg(ctx, x, y, angle, width, color) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.fillStyle = color;
+        
+        // Thigh
+        ctx.rotate(angle * 0.4);
+        ctx.beginPath(); ctx.roundRect(-width/2, 0, width, 15, width/2); ctx.fill();
+        
+        // Shin
+        ctx.translate(0, 15);
+        ctx.rotate(-angle * 0.6);
+        ctx.beginPath(); ctx.roundRect(-width/2, 0, width, 15, width/2); ctx.fill();
+        
+        // Hoof
+        ctx.fillStyle = '#222';
+        ctx.fillRect(-width/2, 12, width+1, 5);
+        
+        ctx.restore();
+    }
+
+    function animate() {
+        const time = Date.now() / 1000;
+        drawDeer(document.getElementById('canvasA').getContext('2d'), time, configs.A);
+        drawDeer(document.getElementById('canvasB').getContext('2d'), time, configs.B);
+        drawDeer(document.getElementById('canvasC').getContext('2d'), time, configs.C);
+        requestAnimationFrame(animate);
+    }
+    animate();
+</script>
+
+</body>
+</html>

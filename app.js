@@ -38,29 +38,34 @@ function triggerHitGlow(entity, duration = 0.22) {
     entity.hurtTimer = Math.max(entity.hurtTimer || 0, duration);
 }
 
-function applyHitGlow(ctx, entity, glowRgb = '255,236,140') {
+function applyHitGlow(ctx, entity, glowRgb = '255,255,255') {
     if (!entity || !entity.hurtTimer || entity.hurtTimer <= 0) return;
     const pulseBase = Math.min(1, entity.hurtTimer / 0.22);
     const pulse = pulseBase * (0.82 + Math.abs(Math.sin((entity.time || 0) * 30)) * 0.18);
-    ctx.shadowColor = `rgba(${glowRgb}, ${0.95 * pulse})`;
-    ctx.shadowBlur = 14 + pulse * 16;
-    ctx.filter = `brightness(${1.12 + pulse * 0.28}) saturate(${1.04 + pulse * 0.2})`;
+    // Disabling expensive filters for performance
+    // ctx.shadowColor = `rgba(${glowRgb}, ${0.95 * pulse})`;
+    // ctx.shadowBlur = 14 + pulse * 16;
+    // ctx.filter = `brightness(${1.12 + pulse * 0.28}) saturate(${1.04 + pulse * 0.2})`;
 }
 
 // ─── INPUT ────────────────────────────────────────────────────────────────────
 class Input {
     constructor() {
-        this.keys = {}; this.pressed = {};
+        this.keys = {}; this.pressed = {}; this.released = {};
         window.addEventListener('keydown', e => {
             sfx.init();
             if (!this.keys[e.code]) this.pressed[e.code] = true;
             this.keys[e.code] = true;
             e.preventDefault();
         });
-        window.addEventListener('keyup', e => { this.keys[e.code] = false; });
+        window.addEventListener('keyup', e => { 
+            this.keys[e.code] = false; 
+            this.released[e.code] = true;
+        });
     }
     isDown(c) { return !!this.keys[c]; }
     justPressed(c) { if (this.pressed[c]) { this.pressed[c] = false; return true; } return false; }
+    justReleased(c) { if (this.released[c]) { this.released[c] = false; return true; } return false; }
 }
 
 // ─── CAMERA ──────────────────────────────────────────────────────────────────
@@ -74,19 +79,101 @@ class Camera {
 
 // ─── PARTICLE ─────────────────────────────────────────────────────────────────
 class Particle {
-    constructor(x, y, color, vx, vy) {
+    constructor(x, y, color, vx, vy, type = 'pixel') {
         this.x = x; this.y = y;
-        this.vx = vx !== undefined ? vx : (Math.random() - 0.5) * 200;
+        this.vx = vx !== undefined ? vx : (Math.random() - 0.5) * 150;
         this.vy = vy !== undefined ? vy : -Math.random() * 200 - 80;
         this.life = 1.0; this.color = color;
+        this.type = type;
+        this.time = Math.random() * Math.PI * 2;
     }
-    update(dt) { this.vy += 500 * dt; this.x += this.vx * dt; this.y += this.vy * dt; this.life -= dt * 2; }
+    update(dt) {
+        if (this.type === 'leaf' || this.type === 'petal') {
+            const drag = this.type === 'petal' ? 0.94 : 0.98;
+            const flutter = this.type === 'petal' ? 70 : 40;
+            const grav = this.type === 'petal' ? 80 : 200;
+            this.vy = (this.vy + grav * dt) * drag;
+            this.x += (this.vx + Math.sin(this.time * 6) * flutter) * dt;
+            this.y += this.vy * dt;
+            this.time += dt;
+            this.life -= dt * (this.type === 'petal' ? 0.4 : 0.6);
+        } else {
+            this.vy += 500 * dt; this.x += this.vx * dt; this.y += this.vy * dt; this.life -= dt * 2;
+        }
+    }
     draw(ctx, cam) {
         if (this.life <= 0) return;
+        ctx.save();
         ctx.globalAlpha = this.life;
         ctx.fillStyle = this.color;
-        ctx.fillRect(this.x - cam.x, this.y, 6, 6);
-        ctx.globalAlpha = 1;
+        const sx = this.x - cam.x;
+        if (this.type === 'leaf' || this.type === 'petal') {
+            ctx.translate(sx, this.y);
+            ctx.rotate(Math.sin(this.time * 4) * 0.5 + (this.type === 'petal' ? this.time * 2 : 0));
+            const size = this.type === 'petal' ? 4 : 6;
+            ctx.fillRect(-size/2, -size/2, size, size);
+        } else {
+            ctx.fillRect(sx, this.y, 6, 6);
+        }
+        ctx.restore();
+    }
+}
+
+// ─── BIRD ─────────────────────────────────────────────────────────────────────
+class Bird {
+    constructor(world, tree) {
+        this.world = world;
+        this.tree = tree;
+        // Random perch position: left, mid, or right
+        this.perchOffsetX = (Math.random() - 0.5) * 60;
+        this.x = tree.x + this.perchOffsetX;
+        this.y = tree.y - tree.height;
+        this.state = 'perched'; // 'perched', 'flying'
+        this.vx = 0; this.vy = 0;
+        this.time = Math.random() * 10;
+        this.wingPos = 0;
+        this.dead = false;
+        this.color = ['#333', '#555', '#444'][Math.floor(Math.random()*3)];
+    }
+    takeOff() {
+        if (this.state === 'perched') {
+            this.state = 'flying';
+            // Varied angles focused upward
+            this.vx = (Math.random() - 0.5) * 300;
+            this.vy = -250 - Math.random() * 150;
+        }
+    }
+    update(dt) {
+        this.time += dt;
+        if (this.state === 'perched') {
+            if (this.tree.dead) { this.takeOff(); return; }
+            this.x = this.tree.x + this.perchOffsetX;
+            const shake = this.tree.hitAnimation > 0 ? Math.sin(this.tree.hitAnimation * 50) * 5 : 0;
+            this.x += shake;
+            this.y = this.tree.y - this.tree.height - 5;
+        } else {
+            this.vy -= 150 * dt; // continue flying up
+            this.vx += (Math.random() - 0.5) * 50 * dt;
+            this.x += this.vx * dt;
+            this.y += this.vy * dt;
+            this.wingPos = Math.sin(this.time * 25);
+            if (this.y < -500 || Math.abs(this.x) > 10000) this.dead = true;
+        }
+    }
+    draw(ctx, cam) {
+        const sx = this.x - cam.x;
+        ctx.save();
+        ctx.translate(sx, this.y);
+        ctx.fillStyle = this.color;
+        // Body
+        ctx.beginPath(); ctx.ellipse(0, 0, 4, 3, 0, 0, Math.PI*2); ctx.fill();
+        // Wings
+        const wY = this.state === 'perched' ? 2 : this.wingPos * 6;
+        ctx.beginPath();
+        ctx.moveTo(-4, 0); ctx.lineTo(-8, -wY);
+        ctx.moveTo(4, 0); ctx.lineTo(8, -wY);
+        ctx.strokeStyle = this.color; ctx.lineWidth = 2; ctx.stroke();
+        ctx.restore();
     }
 }
 
@@ -143,6 +230,11 @@ class GroundItem {
             ctx.fillStyle = '#7a4800'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center';
             ctx.fillText('100G', 0, 4); ctx.textAlign = 'left';
             ctx.restore();
+        } else if (this.type === 'meat') {
+            // Meat drop
+            ctx.fillStyle = '#c8102e'; ctx.fillRect(sx - 4, sy - 6, 12, 8);
+            ctx.fillStyle = '#f0f0f0'; ctx.fillRect(sx + 8, sy - 4, 3, 4); // bone end
+            ctx.fillStyle = '#ff4444'; ctx.fillRect(sx - 2, sy - 4, 6, 4); // highlight
         } else {
             // Coin
             ctx.fillStyle = '#ffd700';
@@ -227,8 +319,8 @@ class Meteor {
 // ─── WOOD BLOCK ───────────────────────────────────────────────────────────────
 class WoodBlock {
     constructor(world, x) {
-        this.world = world; this.x = x; this.y = world.groundY - 40;
-        this.w = 36; this.h = 40; this.maxHp = 60; this.hp = 60;
+        this.world = world; this.x = x; this.y = world.groundY - 48;
+        this.w = 36; this.h = 48; this.maxHp = 60; this.hp = 60;
         this.dead = false; this.hitTimer = 0;
     }
     takeDamage(dmg) {
@@ -248,10 +340,108 @@ class WoodBlock {
         ctx.strokeStyle = '#5c2e00'; ctx.lineWidth = 2;
         for (let i = 1; i < 3; i++) { ctx.beginPath(); ctx.moveTo(sx, this.y + i * 13); ctx.lineTo(sx + this.w, this.y + i * 13); ctx.stroke(); }
         ctx.beginPath(); ctx.moveTo(sx + this.w / 2, this.y); ctx.lineTo(sx + this.w / 2, this.y + this.h); ctx.stroke();
-        ctx.beginPath(); // clear residual stroke path
-        ctx.fillStyle = '#500'; ctx.fillRect(sx, this.y - 7, this.w, 4);
-        ctx.fillStyle = '#d4930a'; ctx.fillRect(sx, this.y - 7, (this.hp / this.maxHp) * this.w, 4);
+        ctx.beginPath();
+        
+        // --- Improved HP Bar ---
+        const hpY = this.y + this.h + 5;
+        const hpRatio = this.hp / this.maxHp;
+        ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(sx, hpY, this.w, 6);
+        ctx.fillStyle = hpRatio > 0.5 ? '#00f5ff' : hpRatio > 0.25 ? '#ffaa00' : '#ff0054';
+        ctx.fillRect(sx, hpY, this.w * hpRatio, 6);
+        ctx.strokeStyle = 'white'; ctx.lineWidth = 1; ctx.strokeRect(sx, hpY, this.w, 6);
+        
         ctx.restore();
+    }
+}
+
+// ─── DECORATION ──────────────────────────────────────────────────────────────
+class Decoration {
+    constructor(world, x, type) {
+        this.world = world; this.x = x; this.y = world.groundY + Math.random() * 6 - 3;
+        this.type = type; // 'grass', 'flower'
+        this.color = type === 'grass' ? '#3d5e3a' : ['#ffafcc', '#ff595e', '#ffca3a', '#fb6f92', '#8338ec'][Math.floor(Math.random()*5)];
+        this.size = type === 'grass' ? 6 + Math.random() * 10 : 12 + Math.random() * 6;
+        this.state = 'bud';
+        this.stateTimer = 5 + Math.random() * 20;
+        this.time = Math.random() * 10;
+        this.swaySpeed = 1.2 + Math.random() * 0.8;
+    }
+    update(dt) {
+        this.time += dt;
+        if (this.type === 'flower') {
+            this.stateTimer -= dt;
+            if (this.stateTimer <= 0) {
+                if (this.state === 'bud') { this.state = 'blooming'; this.stateTimer = 8; }
+                else if (this.state === 'blooming') { this.state = 'open'; this.stateTimer = 30 + Math.random() * 50; }
+                else if (this.state === 'open') { this.state = 'faded'; this.stateTimer = 16 + Math.random() * 24; }
+                else { this.state = 'bud'; this.stateTimer = 40 + Math.random() * 80; }
+            }
+            // Petal drop chance in open state
+            if (this.state === 'open' && Math.random() < 0.007) {
+                this.world.particles.push(new Particle(this.x, this.y - this.size, this.color, (Math.random()-0.5)*40, -Math.random()*20, 'petal'));
+            }
+        }
+    }
+    draw(ctx, cam) {
+        const sx = this.x - cam.x;
+        if (sx < -100 || sx > ctx.canvas.width + 100) return;
+        const sway = Math.sin(this.time * this.swaySpeed) * 3;
+        ctx.save();
+        ctx.translate(sx, this.y);
+        if (this.type === 'grass') {
+            ctx.strokeStyle = this.color; ctx.lineWidth = 1.8;
+            ctx.beginPath(); ctx.moveTo(0,0); ctx.quadraticCurveTo(sway, -this.size/2, sway, -this.size); 
+            ctx.moveTo(0,0); ctx.quadraticCurveTo(-sway, -this.size/2, -sway, -this.size*0.7);
+            ctx.stroke();
+        } else if (this.type === 'flower') {
+            ctx.strokeStyle = '#2d4c1e'; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(0,0); ctx.quadraticCurveTo(sway, -this.size/2, sway, -this.size); ctx.stroke();
+            ctx.translate(sway, -this.size);
+            if (this.state === 'bud') {
+                ctx.fillStyle = '#4a7c2c'; ctx.beginPath(); ctx.arc(0,0, 3, 0, Math.PI*2); ctx.fill();
+            } else {
+                let s = this.state === 'blooming' ? 0.3 + (1 - this.stateTimer/4)*0.7 : (this.state === 'open' ? 1 : 0.7);
+                ctx.scale(s, s);
+                ctx.fillStyle = this.color;
+                if (this.state === 'faded') ctx.globalAlpha = 0.5;
+                for(let i=0; i<5; i++) {
+                    ctx.rotate((Math.PI*2)/5);
+                    ctx.beginPath(); ctx.ellipse(4, 0, 5, 3, 0, 0, Math.PI*2); ctx.fill();
+                }
+                ctx.fillStyle = '#ffea00'; ctx.beginPath(); ctx.arc(0,0, 2, 0, Math.PI*2); ctx.fill();
+            }
+        }
+        ctx.restore();
+    }
+}
+
+class Ladybug {
+    constructor(world, deco) {
+        this.world = world;
+        this.deco = deco;
+        // Float near the decoration
+        this.offsetX = (Math.random() - 0.5) * 15;
+        this.offsetY = -Math.random() * deco.size;
+        this.x = deco.x + this.offsetX;
+        this.y = deco.y + this.offsetY;
+        this.time = Math.random() * 10;
+        this.vx = 0; this.vy = 0;
+    }
+    update(dt) {
+        this.time += dt;
+        // Tiny crawling vibration
+        this.x = this.deco.x + this.offsetX + Math.sin(this.time * 2) * 2;
+        this.y = this.deco.y + this.offsetY + Math.cos(this.time * 3) * 1;
+    }
+    draw(ctx, cam) {
+        const sx = this.x - cam.x;
+        ctx.fillStyle = '#c00'; // Red
+        ctx.beginPath(); ctx.ellipse(sx, this.y, 2.2, 1.8, 0, 0, Math.PI * 2); ctx.fill();
+        // Spots
+        ctx.fillStyle = '#000';
+        ctx.beginPath(); ctx.arc(sx - 0.8, this.y - 0.5, 0.5, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(sx + 0.8, this.y + 0.5, 0.5, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(sx, this.y, 0.4, 0, Math.PI*2); ctx.fill();
     }
 }
 
@@ -337,7 +527,7 @@ class Farm {
         if (Math.abs(this.x - player.x) < 70) {
             ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(sx - 80, sy - 85, 160, 20);
             ctx.fillStyle = '#fff'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
-            if (this.level === 1) ctx.fillText('Upgrade Farm 150G [U]', sx, sy - 71);
+            if (this.level === 1) ctx.fillText('Upgrade Farm 50 Wood [U]', sx, sy - 71);
             else ctx.fillText('Max level!', sx, sy - 71);
             ctx.textAlign = 'left';
         }
@@ -365,7 +555,7 @@ class Arrow {
         this.y += this.vy * dt;
         this.vy += 60 * dt; // gentle gravity arc
         if (this.isEnemy) {
-            const targets = [this.world.game.player, ...this.world.soldiers, ...this.world.workers, ...this.world.archers, this.world.outpost];
+            const targets = [this.world.game.player, ...this.world.soldiers, ...this.world.workers, ...this.world.archers, ...this.world.hunters, this.world.outpost];
             for (const t of targets) {
                 if (!t || t.dead) continue;
                 if (Math.abs(t.x - this.x) < 30 && (t === this.world.outpost || Math.abs(t.y - this.y) < 50)) {
@@ -391,7 +581,7 @@ class Arrow {
         ctx.translate(sx, this.y); ctx.rotate(angle);
         ctx.fillStyle = '#8b4513'; ctx.fillRect(-14, -1, 26, 2);
         ctx.fillStyle = '#bbb';
-        ctx.beginPath(); ctx.moveTo(12, 0); ctx.lineTo(18, -3); ctx.lineTo(18, 3); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(18, 0); ctx.lineTo(12, -3); ctx.lineTo(12, 3); ctx.fill();
         ctx.fillStyle = '#c8a000';
         ctx.beginPath(); ctx.moveTo(-14, 0); ctx.lineTo(-8, -4); ctx.lineTo(-6, 0); ctx.fill();
         ctx.beginPath(); ctx.moveTo(-14, 0); ctx.lineTo(-8, 4); ctx.lineTo(-6, 0); ctx.fill();
@@ -417,7 +607,7 @@ class Fireball {
         if (this.age > 4) { this.dead = true; return; }
         this.x += this.vx * dt;
         this.y += this.vy * dt;
-        const targets = [...this.world.farms, ...this.world.barracks, this.world.outpost, this.world.game.player, ...this.world.soldiers, ...this.world.archers, ...this.world.workers];
+        const targets = [...this.world.farms, ...this.world.barracks, this.world.outpost, this.world.game.player, ...this.world.soldiers, ...this.world.archers, ...this.world.workers, ...this.world.hunters];
         for (const t of targets) {
             if (!t || t.dead) continue;
             const dist = Math.abs(t.x - this.x);
@@ -439,10 +629,152 @@ class Fireball {
     }
 }
 
+// ─── HERO FIREBALL ────────────────────────────────────────────────────────────
+class HeroFireball {
+    constructor(world, x, y, facingRight) {
+        this.world = world;
+        this.x = x; this.y = y;
+        this.dead = false; this.age = 0;
+        this.dmg = 75; // Powerful hero attack
+        this.vx = facingRight ? 450 : -450;
+        this.vy = 0;
+        this.facingRight = facingRight;
+    }
+    update(dt) {
+        this.age += dt;
+        if (this.age > 2.5) { this.dead = true; return; }
+        this.x += this.vx * dt;
+        
+        // Embers trail
+        if (Math.random() < 0.4) {
+            this.world.particles.push(new Particle(this.x, this.y + (Math.random()-0.5)*10, '#ffaa00', -this.vx*0.2, (Math.random()-0.5)*40));
+        }
+
+        for (const e of this.world.enemies) {
+            if (e.dead) continue;
+            const dist = Math.abs(e.x - this.x);
+            if (dist < 40 && Math.abs(e.y - this.y) < 60) {
+                e.takeDamage(this.dmg);
+                // Explosion effect
+                for (let i = 0; i < 12; i++) {
+                    this.world.particles.push(new Particle(this.x, this.y, '#ff4400', (Math.random()-0.5)*300, (Math.random()-0.5)*300));
+                }
+                this.dead = true; return;
+            }
+        }
+    }
+    draw(ctx, cam) {
+        if (this.dead) return;
+        const sx = this.x - cam.x;
+        ctx.save();
+        // Outer glow
+        const g = ctx.createRadialGradient(sx, this.y, 0, sx, this.y, 15);
+        g.addColorStop(0, '#fff'); g.addColorStop(0.3, '#ffcc00'); g.addColorStop(1, 'rgba(255,68,0,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(sx, this.y, 15, 0, Math.PI * 2); ctx.fill();
+        
+        // Inner core
+        ctx.fillStyle = '#ff4400';
+        ctx.beginPath(); ctx.arc(sx, this.y, 6, 0, Math.PI * 2); ctx.fill();
+        
+        // Flame tail oscillations
+        const t = this.world.game ? this.world.game.lastTime / 1000 : 0;
+        ctx.fillStyle = '#ffaa00';
+        for(let i=0; i<3; i++) {
+            const offX = (this.facingRight ? -1 : 1) * (10 + i * 8);
+            const offY = Math.sin(t * 20 + i) * 6;
+            ctx.beginPath(); ctx.arc(sx + offX, this.y + offY, 5 - i, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.restore();
+    }
+}
+
+// ─── LASER BEAM ──────────────────────────────────────────────────────────────
+class LaserBeam {
+    constructor(world, x, y, tx, ty) {
+        this.world = world;
+        this.x = x; this.y = y;
+        this.tx = tx; this.ty = ty;
+        this.dead = false; this.age = 0;
+        this.maxAge = 0.6; // duration of the beam
+        this.dmg = 60;
+        this.hasHit = false;
+        sfx.beep(800, 'sawtooth', 0.1, 0.2); // laser fire sound
+    }
+    update(dt) {
+        this.age += dt;
+        if (this.age > this.maxAge) { this.dead = true; return; }
+        
+        // Damage once per beam
+        if (!this.hasHit) {
+            this.hasHit = true;
+            // Check along segments of the beam for intersection
+            const targets = [...this.world.farms, ...this.world.barracks, ...this.world.woodBlocks, this.world.outpost, this.world.game.player, ...this.world.soldiers, ...this.world.archers, ...this.world.workers, ...this.world.hunters];
+            
+            // Simple line-circle intersection estimate or just check proximity to the line
+            for (const t of targets) {
+                if (!t || t.dead) continue;
+                const distToLine = this._distPointToLine(t.x, t.y || this.world.groundY - 30);
+                const range = (t === this.world.outpost) ? 80 : 40;
+                if (distToLine < range) {
+                    t.takeDamage ? t.takeDamage(this.dmg) : (t.hp -= this.dmg);
+                    for (let i = 0; i < 5; i++) this.world.particles.push(new Particle(t.x, (t.y || this.world.groundY - 30), '#00f5ff'));
+                }
+            }
+        }
+    }
+    _distPointToLine(px, py) {
+        const x1 = this.x, y1 = this.y, x2 = this.tx, y2 = this.ty;
+        const A = px - x1, B = py - y1, C = x2 - x1, D = y2 - y1;
+        const dot = A * C + B * D;
+        const len_sq = C * C + D * D;
+        let param = -1;
+        if (len_sq != 0) param = dot / len_sq;
+        let xx, yy;
+        if (param < 0) { xx = x1; yy = y1; }
+        else if (param > 1) { xx = x2; yy = y2; }
+        else { xx = x1 + param * C; yy = y1 + param * D; }
+        const dx = px - xx, dy = py - yy;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+    draw(ctx, cam) {
+        if (this.dead) return;
+        const sx = this.x - cam.x, sy = this.y;
+        const stx = this.tx - cam.x, sty = this.ty;
+        
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const alpha = Math.sin((this.age / this.maxAge) * Math.PI);
+        
+        // Outer Glow
+        ctx.strokeStyle = '#00f5ff';
+        ctx.lineWidth = 15 * alpha;
+        ctx.lineCap = 'round';
+        ctx.globalAlpha = 0.5 * alpha;
+        ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(stx, sty); ctx.stroke();
+        
+        // Inner Core
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 4 * alpha;
+        ctx.globalAlpha = 1.0 * alpha;
+        ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(stx, sty); ctx.stroke();
+        
+        // Impact Sparks
+        if (this.age < 0.2) {
+            ctx.fillStyle = '#00f5ff';
+            for(let i=0; i<3; i++) {
+                ctx.beginPath(); ctx.arc(stx + (Math.random()-0.5)*20, sty + (Math.random()-0.5)*20, 4, 0, Math.PI*2); ctx.fill();
+            }
+        }
+        
+        ctx.restore();
+    }
+}
+
 // ─── ARCHER ───────────────────────────────────────────────────────────────────
 class Archer {
     constructor(world, x) {
-        this.world = world; this.x = x; this.y = 0;
+        this.world = world; this.x = x; this.y = world.groundY - 60;
         this.vx = 0; this.vy = 0;
         this.facingRight = true; this.time = 0;
         this.maxHp = 70; this.hp = 70;
@@ -543,8 +875,6 @@ class Archer {
         ctx.fillStyle = '#e2b18f';
         ctx.beginPath(); ctx.ellipse(7, 3, 2, 3, 0, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = '#2b1a0f'; ctx.fillRect(15, -1, 3, 2); ctx.fillRect(20, 0, 2, 2);
-        ctx.fillStyle = '#cf9472'; ctx.fillRect(19, 3, 3, 3);
-        ctx.fillStyle = '#9a5f46'; ctx.fillRect(16, 7, 5, 1);
         ctx.save();
         ctx.translate(22, 18);
         if (this.drawingBow) {
@@ -561,8 +891,11 @@ class Archer {
             ctx.strokeStyle = '#e8d8b0'; ctx.lineWidth = 1;
             ctx.beginPath(); ctx.moveTo(22, -10); ctx.lineTo(10 + pull, 10); ctx.lineTo(22, 30); ctx.stroke();
             ctx.beginPath();
-            ctx.fillStyle = '#8b4513'; ctx.fillRect(8 + pull, 8, 20, 2);
-            ctx.fillStyle = '#bbb'; ctx.fillRect(26 + pull, 7, 5, 4);
+            if (this.shootCd <= 1.3) {
+                ctx.fillStyle = '#8b4513'; ctx.fillRect(8 + pull, 8, 20, 2);
+                ctx.fillStyle = '#bbb'; 
+                ctx.beginPath(); ctx.moveTo(33 + pull, 9); ctx.lineTo(28 + pull, 6); ctx.lineTo(28 + pull, 12); ctx.fill();
+            }
         } else {
             ctx.strokeStyle = '#e8d8b0'; ctx.lineWidth = 1;
             ctx.beginPath(); ctx.moveTo(22, -10); ctx.lineTo(22, 30); ctx.stroke();
@@ -598,18 +931,27 @@ class Archer {
 class ForegroundTree {
     constructor(world, x) {
         this.world = world; this.x = x;
-        this.height = 160 + Math.random() * 40;
+        // 10% variation on base height
+        this.height = 140 + (Math.random() - 0.5) * 28; 
         this.y = world.groundY;
         this.health = 3; this.dead = false;
         this.hitAnimation = 0; this.respawnTimer = 0;
+        this.perchedBirds = [];
+        this.chunkScale = 0.85 + Math.random() * 0.3; // Variation in foliage thickness
     }
     hit() {
         if (this.dead) return;
         this.health -= 1; this.hitAnimation = 0.2; sfx.playChop();
-        for (let i = 0; i < 8; i++) this.world.particles.push(new Particle(this.x + 10, this.y - 50, '#8b4513'));
+        // Wood bits
+        for (let i = 0; i < 4; i++) this.world.particles.push(new Particle(this.x + 10, this.y - 40, '#8b4513'));
+        // Leaf bits
+        for (let i = 0; i < 8; i++) this.world.particles.push(new Particle(this.x + 10, this.y - this.height + 40, '#228b22', undefined, undefined, 'leaf'));
+        
+        // All birds fly away
+        this.perchedBirds.forEach(b => b.takeOff());
+
         if (this.health <= 0) {
             this.dead = true; this.respawnTimer = 30;
-            // Drop logs on the ground for pickup
             for (let i = 0; i < 5; i++) {
                 const lx = this.x + (Math.random() - 0.5) * 80;
                 this.world.groundItems.push(new GroundItem(this.world, lx, this.world.groundY - 16, 'log'));
@@ -628,10 +970,25 @@ class ForegroundTree {
         const sx = this.x - cam.x;
         ctx.save();
         if (this.hitAnimation > 0) ctx.translate(Math.sin(this.hitAnimation * 50) * 5, 0);
-        ctx.fillStyle = '#1a0d00'; ctx.fillRect(sx, this.y - this.height, 20, this.height);
-        ctx.fillStyle = '#32cd32';
-        ctx.beginPath(); ctx.moveTo(sx - 40, this.y - this.height * 0.3); ctx.lineTo(sx + 10, this.y - this.height - 50); ctx.lineTo(sx + 60, this.y - this.height * 0.3); ctx.fill();
-        ctx.beginPath(); ctx.moveTo(sx - 50, this.y); ctx.lineTo(sx + 10, this.y - this.height * 0.6); ctx.lineTo(sx + 70, this.y); ctx.fill();
+        
+        // Trunk (Bottom of tree)
+        ctx.fillStyle = '#2b1a0d';
+        ctx.fillRect(sx + 5, this.y - this.height, 10, this.height);
+        
+        // Roots/Base area
+        ctx.fillStyle = '#1a0d00';
+        ctx.fillRect(sx, this.y - 10, 20, 10);
+
+        // Foliage Clusters
+        const cs = this.chunkScale;
+        ctx.fillStyle = '#2e8b57'; // SeaGreen
+        const fy = this.y - this.height;
+        ctx.beginPath(); ctx.arc(sx + 10, fy - 20, 45 * cs, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#228b22'; // ForestGreen (slightly deeper)
+        ctx.beginPath(); ctx.arc(sx - 20, fy + 10, 35 * cs, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(sx + 40, fy + 10, 35 * cs, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(sx + 10, fy + 30, 40 * cs, 0, Math.PI * 2); ctx.fill();
+        
         ctx.restore();
     }
     drawStump(ctx, cam) {
@@ -653,10 +1010,16 @@ class Enemy {
         this.vx = 0; this.vy = 0; this.facingRight = false;
         this.time = 0; this.maxHp = 60; this.hp = 60;
         this.speed = 80; this.dead = false; this.attackCd = 0; this.hurtTimer = 0;
-        this.coinDropped = false;
+        this.coinDropped = false; this.attackTimer = 0;
     }
     takeDamage(dmg) {
         this.hp -= dmg; triggerHitGlow(this); sfx.playHit();
+        /*
+        if (Math.random() < 0.3) {
+            this.x += (this.facingRight ? -1 : 1) * 35; // Knockback effect
+            this.time -= 0.5; // Stun animation
+        }
+        */
         if (this.hp <= 0) { this.dead = true; this.die(this.world); }
     }
     _findTarget() {
@@ -676,6 +1039,14 @@ class Enemy {
                 if (w.dead) continue;
                 const d = Math.abs(this.x - w.x);
                 if (d < bestDist) { bestDist = d; best = { x: w.x, entity: w, type: 'worker' }; }
+            }
+        }
+        // Check hunters
+        if (this.world.hunters) {
+            for (const h of this.world.hunters) {
+                if (h.dead) continue;
+                const d = Math.abs(this.x - h.x);
+                if (d < bestDist) { bestDist = d; best = { x: h.x, entity: h, type: 'hunter' }; }
             }
         }
         // Check wood blocks
@@ -698,6 +1069,7 @@ class Enemy {
         if (this.y > this.world.groundY - 60) { this.y = this.world.groundY - 60; this.vy = 0; }
         if (this.attackCd > 0) this.attackCd -= dt;
         if (this.hurtTimer > 0) this.hurtTimer -= dt;
+        if (this.attackTimer > 0) this.attackTimer -= dt;
 
         const target = this._findTarget();
         if (!target) return;
@@ -712,10 +1084,11 @@ class Enemy {
             this.vx = 0;
             if (this.attackCd <= 0) {
                 this.attackCd = 1.2;
+                this.attackTimer = 0.5;
                 const t = target.entity;
                 if (target.type === 'block') { t.takeDamage(10); }
                 else if (target.type === 'player') { t.takeDamage(15); }
-                else if (target.type === 'soldier' || target.type === 'worker') { t.takeDamage(18); }
+                else if (target.type === 'soldier' || target.type === 'worker' || target.type === 'hunter') { t.takeDamage(18); }
                 else if (target.type === 'outpost' && !t.dead) { t.hp -= 1; if (t.hp < 0) t.hp = 0; }
             }
         }
@@ -742,9 +1115,20 @@ class Enemy {
         ctx.fillStyle = '#1a0022'; ctx.fillRect(5 - ls, 40, 8, 20); ctx.fillRect(17 + ls, 40, 8, 20);
         ctx.fillStyle = '#2d003d'; ctx.fillRect(0, 15, 30, 30);
         ctx.fillStyle = 'purple'; ctx.fillRect(8, 18, 14, 10);
-        ctx.fillStyle = '#2d003d'; ctx.fillRect(24, 15, 6, 18);
-        ctx.fillStyle = '#888'; ctx.fillRect(26, 33, 3, 20);
-        ctx.fillStyle = '#ccc'; ctx.fillRect(24, 52, 7, 4); ctx.fillRect(26, 56, 3, 8);
+        
+        // --- Swinging Arm & Sword ---
+        ctx.save();
+        ctx.translate(27, 24); // shoulder joint
+        if (this.attackTimer > 0) {
+            // Smooth arc swing forward
+            const p = 1 - (this.attackTimer / 0.5);
+            const swing = Math.sin(p * Math.PI) * -1.8;
+            ctx.rotate(swing);
+        }
+        ctx.fillStyle = '#2d003d'; ctx.fillRect(-3, -9, 6, 18);
+        ctx.fillStyle = '#888'; ctx.fillRect(-1.5, 9, 3, 20);
+        ctx.fillStyle = '#ccc'; ctx.fillRect(-3.5, 28, 7, 4); ctx.fillRect(-1.5, 32, 3, 8);
+        ctx.restore();
         ctx.fillStyle = '#ffe0e0'; ctx.fillRect(24, 33, 6, 6);
         ctx.fillStyle = '#3a004d'; ctx.fillRect(5, -5, 20, 22);
         ctx.fillStyle = '#6a0080'; ctx.fillRect(10, 5, 10, 5);
@@ -835,14 +1219,15 @@ class EnemyDragon extends Enemy {
     constructor(world, x) {
         super(world, x);
         this.maxHp = 300; this.hp = 300;
-        this.speed = 40;
+        this.speed = 36; // -10% speed
         this.attackCd = 0; this.shootCd = 0;
+        this.walkDist = 0;
     }
     _findTargetDragon() {
         let best = null; let bestDist = Infinity;
         const targets = [
-            ...this.world.farms, ...this.world.barracks, this.world.outpost,
-            this.world.game.player, ...this.world.soldiers, ...this.world.archers
+            ...this.world.farms, ...this.world.barracks, ...this.world.woodBlocks, this.world.outpost,
+            this.world.game.player, ...this.world.soldiers, ...this.world.archers, ...this.world.hunters
         ];
         for (const t of targets) {
             if (t.dead || (t.hp !== undefined && t.hp <= 0)) continue;
@@ -856,24 +1241,26 @@ class EnemyDragon extends Enemy {
     }
     update(dt) {
         this.time += dt;
-        // Land-based: no gravity/flight, stay on ground
-        this.y = this.world.groundY - 50; 
+        // Fix leg clipping through ground. Foot reaches local y = 140.
+        this.y = this.world.groundY - 140; 
         this.vy = 0;
         if (this.attackCd > 0) this.attackCd -= dt;
         if (this.shootCd > 0) this.shootCd -= dt;
         if (this.hurtTimer > 0) this.hurtTimer -= dt;
+        if (Math.abs(this.vx) > 0) this.walkDist += dt * 7;
 
-        // Ambient Smoke/Bubbles (Cute)
-        if (!this.dead && Math.random() < 0.1) {
-            const mx = this.x + (this.facingRight ? 80 : -20), my = this.y - 10;
-            this.world.particles.push(new Particle(mx, my, '#ffaa00', (Math.random() - 0.5) * 30, -Math.random() * 50));
+        // --- Heat Sink Vents (Particles) ---
+        if (!this.dead && Math.random() < 0.15) {
+            const ventX = this.x + (this.facingRight ? -40 : 40);
+            const ventY = this.y - 60; // Top of the cyborg body shell
+            this.world.particles.push(new Particle(ventX, ventY, 'rgba(0, 245, 255, 0.4)', (this.facingRight ? -1 : 1) * 20, -30));
         }
 
         const target = this._findTargetDragon() || this._findTarget();
         if (!target) return;
         const dist = Math.abs(this.x - target.x);
 
-        if (dist > 180) {
+        if (dist > 160) { // Adjust distance to original 1.0x scale
             const dir = Math.sign(target.x - this.x);
             this.vx = dir * this.speed; this.facingRight = dir > 0;
             this.x += this.vx * dt;
@@ -881,21 +1268,22 @@ class EnemyDragon extends Enemy {
             this.vx = 0;
             const dir = Math.sign(target.x - this.x);
             this.facingRight = dir > 0;
+            
+            // --- LASER BEAM ATTACK ---
             if (this.shootCd <= 0) {
-                this.shootCd = 3.0;
-                // Shoot two fireballs from head height with a slight vertical spread.
-                const fireballX = this.x + (this.facingRight ? 60 : -20);
-                const fireballY = this.y - 10;
+                this.shootCd = 3.5;
+                const mouthX = this.x + (this.facingRight ? 110 : -110);
+                const mouthY = this.y - 85; // Align exact with jaw center
                 const targetY = target.entity?.y ?? (this.world.groundY - 30);
-                this.world.arrows.push(new Fireball(this.world, fireballX, fireballY - 12, target.x, targetY - 18));
-                this.world.arrows.push(new Fireball(this.world, fireballX, fireballY + 12, target.x, targetY + 18));
-                sfx.playHit();
+                this.world.arrows.push(new LaserBeam(this.world, mouthX, mouthY, target.x, targetY));
             }
-            if (dist < 100 && this.attackCd <= 0) {
+            
+            // --- MELEE ATTACK ---
+            if (dist < 150 && this.attackCd <= 0) {
                 this.attackCd = 2.0;
                 const t = target.entity;
-                if (t.takeDamage) t.takeDamage(40);
-                else { t.hp -= 25; sfx.playHit(); if (t.hp < 0) { t.hp = 0; if (t !== this.world.outpost) t.dead = true; } }
+                if (t.takeDamage) t.takeDamage(45);
+                else { t.hp -= 30; sfx.playHit(); if (t.hp < 0) { t.hp = 0; if (t !== this.world.outpost) t.dead = true; } }
             }
         }
     }
@@ -908,87 +1296,129 @@ class EnemyDragon extends Enemy {
     draw(ctx, cam) {
         if (this.dead) return;
         const sx = this.x - cam.x, sy = this.y;
+        
+        ctx.save();
+        applyHitGlow(ctx, this, '0,245,255');
+        
+        // --- Scale & Base Translation ---
+        ctx.translate(sx, sy);
+        if (!this.facingRight) ctx.scale(-1, 1);
+
         const bob = Math.sin(this.time * 5) * 5;
+        const walk = Math.sin(this.walkDist);
+        const breath = Math.sin(this.time * 3);
+
+        const colors = {
+            plate: '#1e1e24', metal: '#4a4a58', lightMetal: '#888899',
+            neon: '#00f5ff', glow: 'rgba(0, 245, 255, 0.5)', eye: '#ffea00', accent: '#ff0054'
+        };
+
+        // --- Shadow ---
+        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        ctx.beginPath(); ctx.ellipse(-20, 140, 90, 20, 0, 0, Math.PI*2); ctx.fill();
+
+        ctx.translate(0, bob);
+
+        // --- Back Leg ---
         ctx.save();
-        applyHitGlow(ctx, this, '255,166,98');
-        // Subtle waddle bob
-        const legWalk = Math.sin(this.time * 8);
-        ctx.translate(sx, sy + bob);
-        if (!this.facingRight) { ctx.translate(100, 0); ctx.scale(-1, 1); }
+        ctx.translate(-20 - walk * 25, 30);
+        ctx.rotate(0.2 + walk * 0.4);
+        ctx.fillStyle = colors.plate;
+        ctx.beginPath(); ctx.roundRect(-25, -20, 50, 70, 15); ctx.fill();
+        ctx.strokeStyle = colors.metal; ctx.lineWidth = 2; ctx.stroke();
+        // Lower Leg
+        ctx.translate(0, 50); ctx.rotate(-0.4 - walk * 0.5);
+        ctx.fillStyle = colors.metal; ctx.beginPath(); ctx.roundRect(-15, 0, 30, 60, [5, 5, 10, 10]); ctx.fill();
+        ctx.restore();
 
-        const color = '#e63946';
-        const dark = '#1d3557';
-        const gold = '#ffd700';
-
-        // ═══ LEGS (4 stubby legs) ═══
-        ctx.fillStyle = dark;
-        // Back legs (drawn behind body)
-        ctx.fillRect(10 + legWalk * 10, 30, 15, 25);
-        ctx.fillRect(60 - legWalk * 10, 30, 15, 25);
-        
-        // ═══ TAIL ═══
-        const tailWag = Math.sin(this.time * 4) * 15;
-        ctx.strokeStyle = color; ctx.lineWidth = 18; ctx.lineCap = 'round';
-        ctx.beginPath(); ctx.moveTo(0, 20); ctx.quadraticCurveTo(-40, 10 + tailWag, -70, 40 + tailWag); ctx.stroke();
-        // Spines
-        ctx.fillStyle = dark;
-        for(let i=1; i<4; i++) {
-            ctx.beginPath(); ctx.arc(-15 * i, 20 + i * 5 + tailWag * (i / 4), 6, 0, Math.PI * 2); ctx.fill();
+        // --- Tail Segmented ---
+        const tailWag = Math.sin(this.time * 3) * 15;
+        let lastX = -35, lastY = 10;
+        ctx.save();
+        for(let i=1; i<=6; i++) {
+            const segRot = (tailWag / 10) * (i / 6) - 0.2;
+            ctx.translate(lastX, lastY); ctx.rotate(segRot);
+            ctx.fillStyle = colors.plate; const size = 45 - i * 6;
+            ctx.beginPath(); ctx.roundRect(-size, -size/2, size, size, 5); ctx.fill();
+            ctx.strokeStyle = colors.lightMetal; ctx.lineWidth = 1; ctx.stroke();
+            lastX = -size + 5; lastY = 0;
         }
+        ctx.restore();
 
-        // ═══ BODY (Chubby) ═══
-        const gr = ctx.createLinearGradient(0, 0, 0, 60);
-        gr.addColorStop(0, color); gr.addColorStop(1, '#900');
-        ctx.fillStyle = gr;
-        ctx.beginPath();
-        ctx.ellipse(40, 15, 55, 40, 0, 0, Math.PI * 2);
-        ctx.fill();
-        // Belly (Lighter)
-        ctx.fillStyle = 'rgba(255,255,255,0.2)';
-        ctx.beginPath();
-        ctx.ellipse(45, 25, 35, 20, 0, 0, Math.PI * 2);
-        ctx.fill();
+        // --- Body ---
+        const bodyGrad = ctx.createLinearGradient(0, -60, 0, 60);
+        bodyGrad.addColorStop(0, '#2c2c34'); bodyGrad.addColorStop(1, '#0a0a0d');
+        ctx.fillStyle = bodyGrad;
+        ctx.beginPath(); ctx.ellipse(15, 0, 60, 95, 0.4, 0, Math.PI*2); ctx.fill();
+        // Neon Conduits
+        ctx.strokeStyle = colors.neon; ctx.lineWidth = 2; ctx.globalAlpha = 0.6 + breath * 0.4;
+        ctx.beginPath(); ctx.moveTo(-5, -40); ctx.quadraticCurveTo(20, -50, 35, -20); ctx.stroke();
+        ctx.globalAlpha = 1.0;
 
-        // ═══ FRONT LEGS ═══
-        ctx.fillStyle = dark;
-        ctx.fillRect(25 - legWalk * 10, 40, 16, 25);
-        ctx.fillRect(75 + legWalk * 10, 40, 16, 25);
-
-        // ═══ HEAD (Chibi) ═══
+        // --- Arms ---
+        const armWave = Math.sin(this.time * 6) * 12;
         ctx.save();
-        ctx.translate(85, -5);
-        ctx.rotate(Math.sin(this.time * 4) * 0.1); 
-        // Neck
-        ctx.fillStyle = color;
-        ctx.fillRect(-10, 0, 30, 30);
-        // Face
-        ctx.beginPath();
-        ctx.moveTo(0, -10); ctx.lineTo(60, 0); ctx.lineTo(60, 40); ctx.lineTo(0, 45); ctx.closePath();
-        ctx.fill();
-        // Small Horns
-        ctx.fillStyle = dark;
-        ctx.beginPath(); ctx.moveTo(10, -5); ctx.lineTo(15, -25); ctx.lineTo(25, -5); ctx.fill();
-        ctx.beginPath(); ctx.moveTo(25, -2); ctx.lineTo(30, -20); ctx.lineTo(40, -2); ctx.fill();
-        // Big Cute Eyes
-        const eyeSize = 14;
-        const eyeGlow = 0.8 + Math.sin(this.time * 10) * 0.2;
-        ctx.fillStyle = '#fff';
-        ctx.beginPath(); ctx.arc(20, 15, eyeSize, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = gold;
-        ctx.globalAlpha = eyeGlow;
-        ctx.beginPath(); ctx.arc(20, 15, eyeSize - 3, 0, Math.PI * 2); ctx.fill();
-        ctx.globalAlpha = 1;
-        ctx.fillStyle = '#000';
-        ctx.beginPath(); ctx.arc(23, 13, 4, 0, Math.PI * 2); ctx.fill(); 
+        ctx.translate(50, -10 + armWave);
+        ctx.strokeStyle = colors.metal; ctx.lineWidth = 12; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(30, 20); ctx.stroke();
+        ctx.translate(30, 20); ctx.rotate(0.5 + Math.sin(this.time*8)*0.2);
+        ctx.strokeStyle = colors.lightMetal; ctx.lineWidth = 8;
+        ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(40, -10); ctx.stroke();
+        // Claw
+        ctx.fillStyle = colors.lightMetal; ctx.save(); ctx.translate(40, -10);
+        ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(15, 0); ctx.lineTo(12, 5); ctx.closePath(); ctx.fill();
+        ctx.restore();
+        ctx.restore();
+
+        // --- Head ---
+        const headNod = Math.sin(this.time * 4) * 0.12;
+        ctx.save();
+        ctx.translate(65, -85);
+        ctx.rotate(headNod);
+        ctx.fillStyle = colors.plate; ctx.beginPath(); ctx.roundRect(-20, -35, 110, 75, [10, 40, 25, 10]); ctx.fill();
+        ctx.strokeStyle = colors.metal; ctx.lineWidth = 2; ctx.stroke();
+        // Visor
+        ctx.fillStyle = '#0a0a0a'; ctx.fillRect(15, -12, 65, 18);
+        const scanX = 15 + ((this.time * 80) % 65);
+        
+        let charge = 1 - (this.shootCd / 3.5); if (charge < 0) charge = 0;
+        ctx.fillStyle = `rgba(0, 255, 255, ${0.1 + charge * 0.9})`; 
+        ctx.fillRect(15, -12, 65 * charge, 18); // Fill bar based on laser charge
+        
+        ctx.fillStyle = '#fff'; ctx.fillRect(scanX, -12, 4, 18);
+        // Teeth
+        ctx.fillStyle = '#d1d1d1'; const jawDrop = 5 + Math.sin(this.time * 12) * 4;
+        for(let i=0; i<6; i++) { ctx.beginPath(); ctx.moveTo(25+i*10, 10); ctx.lineTo(30+i*10, 22); ctx.lineTo(35+i*10, 10); ctx.fill(); }
+        // Lower Jaw
+        ctx.fillStyle = colors.plate; ctx.save(); ctx.translate(10, 30 + jawDrop);
+        ctx.beginPath(); ctx.roundRect(0, 0, 70, 15, [2, 10, 10, 2]); ctx.fill();
+        ctx.restore();
+        // Plasma
+        ctx.globalCompositeOperation = 'lighter';
+        const pulse = 30 + breath * 15;
+        const pGrad = ctx.createRadialGradient(100, 10, 5, 100, 10, pulse);
+        pGrad.addColorStop(0, '#fff'); pGrad.addColorStop(0.2, colors.neon); pGrad.addColorStop(1, 'transparent');
+        ctx.fillStyle = pGrad; ctx.beginPath(); ctx.arc(100, 10, pulse, 0, Math.PI*2); ctx.fill();
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.restore();
+
+        // --- Front Leg ---
+        ctx.save();
+        ctx.translate(30 + walk * 25, 45);
+        ctx.rotate(-0.1 - walk * 0.4);
+        ctx.fillStyle = colors.plate; ctx.beginPath(); ctx.roundRect(-30, -25, 60, 80, 20); ctx.fill();
+        ctx.translate(0, 60); ctx.rotate(0.2 + walk * 0.3);
+        ctx.fillStyle = colors.plate; ctx.fillRect(-20, 0, 40, 65);
+        ctx.strokeStyle = colors.neon; ctx.strokeRect(-20,0,40,65);
         ctx.restore();
 
         ctx.restore();
         
-        // HP Bar
-        const hpY = sy - 80;
-        ctx.fillStyle = '#400'; ctx.fillRect(sx - 20, hpY, 140, 10);
-        ctx.fillStyle = '#e00'; ctx.fillRect(sx - 20, hpY, (this.hp / this.maxHp) * 140, 10);
-        ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.strokeRect(sx - 20, hpY, 140, 10);
+        // --- HP Bar (Centered) ---
+        const hpY = sy - 150;
+        ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(sx - 50, hpY, 200, 12);
+        ctx.fillStyle = '#ff0054'; ctx.fillRect(sx - 50, hpY, (this.hp / this.maxHp) * 200, 12);
+        ctx.strokeStyle = 'white'; ctx.lineWidth = 1; ctx.strokeRect(sx - 50, hpY, 200, 12);
     }
 }
 
@@ -999,31 +1429,77 @@ class Shop {
     }
     draw(ctx, cam, player) {
         const sx = this.x - cam.x, dist = Math.abs(this.x - player.x);
-        ctx.fillStyle = '#8b4513'; ctx.fillRect(sx - 30, this.y - 60, 60, 60);
-        ctx.fillStyle = '#fff'; ctx.fillRect(sx - 40, this.y - 70, 80, 10);
-        const shopColor = this.type === 'axe' ? '#ff4444' : '#22aa22';
-        ctx.fillStyle = shopColor;
-        for (let i = 0; i < 8; i += 2) ctx.fillRect(sx - 40 + i * 10, this.y - 70, 10, 10);
-
-        // Draw shop icon/emblem
-        if (this.type === 'axe') {
-            // Weapon sign
-            ctx.fillStyle = '#ddd'; ctx.fillRect(sx - 5, this.y - 55, 10, 3);
-            ctx.fillStyle = '#aaa'; ctx.fillRect(sx - 2, this.y - 52, 4, 20);
-            ctx.fillStyle = '#ccc'; ctx.fillRect(sx - 8, this.y - 38, 16, 6);
-        } else if (this.type === 'hammer') {
-            // Hammer sign
-            ctx.fillStyle = '#ff4400'; ctx.beginPath(); ctx.moveTo(sx, this.y - 55); ctx.lineTo(sx - 12, this.y - 40); ctx.lineTo(sx + 12, this.y - 40); ctx.fill();
-        } else if (this.type === 'refuge') {
-            // Refuge sign
-            ctx.fillStyle = '#ffeedd'; ctx.beginPath(); ctx.moveTo(sx, this.y - 55); ctx.lineTo(sx - 12, this.y - 45); ctx.lineTo(sx + 12, this.y - 45); ctx.fill();
-            ctx.fillRect(sx - 8, this.y - 45, 16, 12);
-            ctx.fillStyle = '#8b4513'; ctx.fillRect(sx - 3, this.y - 40, 6, 7);
+        
+        ctx.save();
+        if (this.type === 'refuge') {
+            // Triangle tent & campfire
+            ctx.fillStyle = '#6b543c'; // tent fabric
+            ctx.beginPath(); ctx.moveTo(sx, this.y - 45); ctx.lineTo(sx - 35, this.y); ctx.lineTo(sx + 35, this.y); ctx.fill();
+            ctx.fillStyle = '#222'; // tent interior
+            ctx.beginPath(); ctx.moveTo(sx, this.y - 30); ctx.lineTo(sx - 15, this.y); ctx.lineTo(sx + 15, this.y); ctx.fill();
+            ctx.strokeStyle = '#4a3622'; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.moveTo(sx, this.y - 45); ctx.lineTo(sx - 35, this.y); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(sx, this.y - 45); ctx.lineTo(sx + 35, this.y); ctx.stroke();
+            
+            // tiny campfire
+            const t = this.world.game ? this.world.game.lastTime / 1000 : 0;
+            ctx.fillStyle = '#442211'; ctx.fillRect(sx + 40, this.y - 4, 15, 4);
+            const fireH = 8 + Math.random() * 6;
+            ctx.fillStyle = '#ffaa00'; ctx.beginPath(); ctx.moveTo(sx + 47, this.y - 4); ctx.lineTo(sx + 42, this.y - 4 - fireH); ctx.lineTo(sx + 52, this.y - 4 - fireH*0.8); ctx.fill();
+            ctx.fillStyle = '#ff4400'; ctx.beginPath(); ctx.moveTo(sx + 47, this.y - 4); ctx.lineTo(sx + 45, this.y - 4 - fireH*0.6); ctx.lineTo(sx + 49, this.y - 4 - fireH*0.5); ctx.fill();
+        } else if (this.type === 'axe' || this.type === 'hammer') {
+            // Weapon / Forge Shop
+            ctx.fillStyle = '#2b2b2b'; ctx.fillRect(sx - 45, this.y - 70, 90, 70); // Frame
+            ctx.fillStyle = '#111'; ctx.fillRect(sx - 40, this.y - 65, 80, 65); // Interior
+            // Forge fire glow
+            const t = this.world.game ? this.world.game.lastTime / 1000 : 0;
+            ctx.fillStyle = `rgba(255, 68, 0, ${0.4 + Math.sin(t*10)*0.1})`;
+            ctx.fillRect(sx - 30, this.y - 30, 60, 30);
+            // Anvil / Workbench
+            ctx.fillStyle = '#444'; ctx.fillRect(sx - 20, this.y - 20, 40, 20); 
+            ctx.fillRect(sx - 25, this.y - 30, 50, 10); 
+            ctx.fillStyle = '#222'; ctx.fillRect(sx - 5, this.y - 20, 10, 20);
+            if (this.type === 'axe') {
+                ctx.fillStyle = '#aaa'; ctx.fillRect(sx - 35, this.y - 50, 4, 30); ctx.fillRect(sx + 30, this.y - 50, 4, 30);
+                ctx.fillStyle = '#8b4513'; ctx.fillRect(sx - 38, this.y - 25, 10, 4); ctx.fillRect(sx + 27, this.y - 25, 10, 4);
+                ctx.fillStyle = '#ddd'; ctx.fillRect(sx, this.y - 60, 10, 3); ctx.fillStyle = '#8b4513'; ctx.fillRect(sx+3, this.y-57, 4, 20);
+            } else {
+                const t = this.world.game ? this.world.game.lastTime / 1000 : 0;
+                const p = 0.7 + Math.sin(t * 8) * 0.3;
+                // High-End Hammer Shop Display
+                ctx.fillStyle = '#111'; ctx.fillRect(sx - 2, this.y - 50, 4, 35); // Obsidian Handle
+                ctx.fillStyle = '#222'; ctx.fillRect(sx - 12, this.y - 65, 24, 15); // Large Head
+                ctx.fillStyle = `rgba(255, 100, 0, ${p})`; ctx.fillRect(sx - 10, this.y - 60, 20, 5); // Glowing Core
+                ctx.fillStyle = '#ffaa00'; // Flame flickering
+                for(let i=0; i<3; i++) {
+                    const h = 8 + Math.sin(t*15+i)*4;
+                    ctx.fillRect(sx - 8 + i*7, this.y - 65 - h, 2, h);
+                }
+            }
+            // Roof
+            ctx.fillStyle = '#3a3a3a'; ctx.beginPath(); ctx.moveTo(sx - 50, this.y - 70); ctx.lineTo(sx + 50, this.y - 70); ctx.lineTo(sx + 40, this.y - 90); ctx.lineTo(sx - 40, this.y - 90); ctx.fill();
+            ctx.fillStyle = '#111'; ctx.fillRect(sx - 10, this.y - 110, 20, 20);
         } else {
-            // Sell sign
-            ctx.fillStyle = '#ffd700'; ctx.font = 'bold 18px sans-serif'; ctx.textAlign = 'center';
-            ctx.fillText('$', sx, this.y - 30); ctx.textAlign = 'left';
+            // Resource / Sell Shop
+            ctx.fillStyle = '#6b4226'; ctx.fillRect(sx - 40, this.y - 60, 80, 60); // Main struct
+            ctx.fillStyle = '#8b5a2b'; ctx.fillRect(sx - 45, this.y - 25, 90, 25); // Counter
+            // Canopy
+            for (let i = 0; i < 9; i++) {
+                ctx.fillStyle = i % 2 === 0 ? '#ccaa44' : '#aa3333';
+                ctx.fillRect(sx - 45 + i * 10, this.y - 80, 10, 40);
+                ctx.beginPath(); ctx.arc(sx - 40 + i * 10, this.y - 40, 5, 0, Math.PI); ctx.fill();
+            }
+            // Sacks & Logs
+            ctx.fillStyle = '#e8cfa6'; ctx.beginPath(); ctx.ellipse(sx - 50, this.y - 10, 12, 10, 0, 0, Math.PI*2); ctx.fill(); 
+            ctx.beginPath(); ctx.ellipse(sx - 42, this.y - 8, 10, 8, 0, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#d2b48c'; ctx.fillRect(sx - 50, this.y - 20, 6, 10); ctx.fillRect(sx - 42, this.y - 18, 6, 10); 
+            ctx.fillStyle = '#5c3a21'; ctx.beginPath(); ctx.arc(sx + 45, this.y - 10, 8, 0, Math.PI*2); ctx.arc(sx + 55, this.y - 10, 8, 0, Math.PI*2); ctx.arc(sx + 50, this.y - 20, 8, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#e6c280'; ctx.beginPath(); ctx.arc(sx + 45, this.y - 10, 6, 0, Math.PI*2); ctx.arc(sx + 55, this.y - 10, 6, 0, Math.PI*2); ctx.arc(sx + 50, this.y - 20, 6, 0, Math.PI*2); ctx.fill();
+            // Golden Dollar Sign on roof
+            ctx.fillStyle = '#ffd700'; ctx.font = 'bold 24px serif'; ctx.textAlign = 'center';
+            ctx.fillText('$', sx, this.y - 85); ctx.textAlign = 'left';
         }
+        ctx.restore();
 
         if (dist < 60) {
             ctx.fillStyle = 'rgba(0,0,0,0.8)';
@@ -1063,21 +1539,27 @@ class Shop {
                 }
                 ctx.textAlign = 'left';
             } else if (this.type === 'refuge') {
-                ctx.fillRect(sx - 100, this.y - 130, 200, 50);
-                ctx.fillStyle = '#fff'; ctx.font = '13px sans-serif'; ctx.textAlign = 'center';
+                ctx.fillRect(sx - 110, this.y - 145, 220, 85);
+                ctx.fillStyle = '#f5c842'; ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center';
                 const cost = this.world.outpost.level >= 2 ? 5 : 2;
-                ctx.fillText(`Hire Worker ${cost} Wheat [E]`, sx, this.y - 116);
+                ctx.fillText(`Hire Worker ${cost} Wheat [1]`, sx, this.y - 128);
                 ctx.fillStyle = '#aaa'; ctx.font = '11px sans-serif';
-                ctx.fillText('Chops trees automatically', sx, this.y - 100);
+                ctx.fillText('Chops trees automatically', sx, this.y - 112);
+                
+                ctx.fillStyle = '#c8102e'; ctx.font = 'bold 13px sans-serif';
+                ctx.fillText('Hire Hunter 5 Wood [2]', sx, this.y - 94);
+                ctx.fillStyle = '#aaa'; ctx.font = '11px sans-serif';
+                ctx.fillText('Hunts wildlife and shoots enemies', sx, this.y - 78);
                 ctx.textAlign = 'left';
             } else {
-                ctx.fillRect(sx - 110, this.y - 145, 220, 85);
+                ctx.fillRect(sx - 130, this.y - 160, 260, 115);
                 ctx.fillStyle = '#fff'; ctx.font = '13px sans-serif'; ctx.textAlign = 'center';
                 ctx.fillText('Sell Wood 2G each', sx, this.y - 128);
-                ctx.fillText('Sell Wheat 3G each', sx, this.y - 112);
+                ctx.fillText('Sell Wheat 3G each', sx, this.y - 114);
+                ctx.fillText('Sell Meat 3G each', sx, this.y - 100);
                 ctx.fillStyle = '#f5c842'; ctx.font = 'bold 10px sans-serif';
-                ctx.fillText('Press E : 1 Wood  /  Press R : 1 Wheat', sx, this.y - 96);
-                ctx.fillText('Hold  E : All Wood /  Hold  R : All Wheat', sx, this.y - 82);
+                ctx.fillText('Tap: E(Wood) | R(Wheat) | Y(Meat)', sx, this.y - 84);
+                ctx.fillText('Hold: E(Wd) | R(Wh) | Y(Mt) (SELL ALL)', sx, this.y - 68);
                 ctx.textAlign = 'left';
             }
         }
@@ -1087,11 +1569,14 @@ class Shop {
 // ─── NPC CIVILIAN ─────────────────────────────────────────────────────────────
 class NPC {
     constructor(world, x) {
-        this.world = world; this.x = x; this.y = 0; this.vx = 0; this.vy = 0;
+        this.world = world; this.x = x; this.y = world.groundY - 60; this.vx = 0; this.vy = 0;
         this.facingRight = true; this.time = 0; this.state = 'idle';
         this.stateTimer = Math.random() * 2; this.targetX = x;
         this.tunicColor = `hsl(${Math.random() * 60 + 20},50%,40%)`;
         this.dialogue = ''; this.dialogueTimer = 0;
+        this.replyTimer = 0; this.replyContent = '';
+        this.hairStyle = Math.random() > 0.5 ? 'spiky' : 'normal';
+        this.hairColor = ['#5a3826', '#333333', '#884422', '#cca444'][Math.floor(Math.random()*4)];
     }
     update(dt) {
         this.time += dt;
@@ -1102,17 +1587,58 @@ class NPC {
             if (this.state === 'idle') { this.state = 'walk'; this.stateTimer = 2 + Math.random() * 3; this.targetX = this.x + (Math.random() - 0.5) * 300; this.facingRight = this.targetX > this.x; }
             else { this.state = 'idle'; this.stateTimer = 1 + Math.random() * 4; }
         }
-        if (this.state === 'walk') { const d = Math.sign(this.targetX - this.x); this.vx = d * 90; this.x += this.vx * dt; if (Math.abs(this.targetX - this.x) < 5) this.state = 'idle'; } else this.vx = 0;
+        if (this.state === 'walk') { 
+            const d = Math.sign(this.targetX - this.x); 
+            this.vx = d * 90; this.x += this.vx * dt; 
+            if (Math.abs(this.targetX - this.x) < 5) this.state = 'idle'; 
+        } else this.vx = 0;
+
         if (this.dialogueTimer > 0) this.dialogueTimer -= dt;
-        else if (Math.random() < 0.003) {
-            const lines = ['Long live the king!', 'Need more wood?', 'Build more walls!', 'Stay safe!', 'The army is coming...', 'Lovely night...'];
-            this.dialogue = lines[Math.floor(Math.random() * lines.length)];
-            this.dialogueTimer = 3;
+        if (this.replyTimer > 0) {
+            this.replyTimer -= dt;
+            if (this.replyTimer <= 0) {
+                this.dialogue = this.replyContent; this.dialogueTimer = 3; this.replyContent = '';
+                this.state = 'idle'; this.stateTimer = 3; // Stop to talk
+            }
+        }
+        // Randomly start a talk (Slower pace)
+        if (this.dialogueTimer <= 0 && this.replyTimer <= 0 && Math.random() < 0.0008) {
+            this._startDialogue();
         }
     }
+
+    _startDialogue() {
+        const topics = [
+            { q: "Long live the King!", a: "He is a wise leader indeed." },
+            { q: "I heard the developer comes from Stinis!", a: "No wonder the pixel art is so charming!" },
+            { q: "Have you seen the King's new hammer?", a: "I heard it shoots fire if you focus long enough..." },
+            { q: "Holding E with that focus... magic!", a: "The Flame Hammer is truly a relic of old." },
+            { q: "The army is coming, we should be ready.", a: "The walls will hold... I hope." },
+            { q: "Building more farms is the key to growth.", a: "And more archers to protect those farms!" },
+            { q: "Beautiful night, isn't it?", a: "Except for the giant dragons, yes." }
+        ];
+        const randomShouts = ["Lovely weather!", "Stay safe!", "Need more wood?", "Watch the skies!", "For the Kingdom!"];
+
+        const isConv = Math.random() < 0.6;
+        if (isConv) {
+            const pair = topics[Math.floor(Math.random() * topics.length)];
+            this.dialogue = pair.q; this.dialogueTimer = 3; this.state = 'idle'; this.stateTimer = 3; 
+            const neighbor = this.world.npcs.find(n => n !== this && Math.abs(n.x - this.x) < 120);
+            if (neighbor && neighbor.dialogueTimer <= 0 && neighbor.replyTimer <= 0) {
+                neighbor.replyContent = pair.a; neighbor.replyTimer = 1.6;
+                neighbor.facingRight = this.x > neighbor.x; this.facingRight = neighbor.x > this.x;
+            }
+        } else {
+            this.dialogue = randomShouts[Math.floor(Math.random() * randomShouts.length)];
+            this.dialogueTimer = 2.5;
+        }
+    }
+
     draw(ctx, cam) {
         const sx = this.x - cam.x, sy = this.y;
         const bob = this.state === 'walk' ? Math.abs(Math.sin(this.time * 12)) * 3 : Math.sin(this.time * 2);
+        
+        // 1. NPC Body (Flippable)
         ctx.save();
         ctx.translate(sx, sy - bob);
         if (!this.facingRight) { ctx.translate(30, 0); ctx.scale(-1, 1); }
@@ -1133,22 +1659,64 @@ class NPC {
         ctx.fillStyle = '#d7c39a'; ctx.fillRect(8, 24, 14, 3);
         ctx.fillStyle = '#6a482e'; ctx.fillRect(24, 19, 5, 17);
         ctx.fillStyle = '#f1c6a3'; ctx.fillRect(24, 34, 5, 5);
+        ctx.fillStyle = this.hairColor;
+        if (this.hairStyle === 'spiky') {
+            ctx.beginPath();
+            ctx.moveTo(5, 5); ctx.lineTo(8, -16); ctx.lineTo(12, -8);
+            ctx.lineTo(15, -20); ctx.lineTo(18, -8);
+            ctx.lineTo(24, -16); ctx.lineTo(26, 5);
+            ctx.closePath(); ctx.fill();
+        } else {
+            ctx.beginPath();
+            ctx.moveTo(5, 5); ctx.quadraticCurveTo(5, -16, 15, -14); ctx.quadraticCurveTo(25, -16, 26, 5); ctx.lineTo(15, 10); ctx.closePath();
+            ctx.fill();
+        }
         ctx.fillStyle = '#f4caaa'; ctx.fillRect(12, 12, 6, 5);
         ctx.beginPath(); ctx.ellipse(15, 2, 11, 12, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#5a3826';
-        ctx.beginPath();
-        ctx.moveTo(6, 1); ctx.quadraticCurveTo(8, -10, 15, -11); ctx.quadraticCurveTo(23, -10, 24, 1); ctx.lineTo(24, 6); ctx.lineTo(6, 6); ctx.closePath();
-        ctx.fill();
         ctx.fillStyle = '#e2b18f';
         ctx.beginPath(); ctx.ellipse(7, 3, 2, 3, 0, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = '#2b1a12'; ctx.fillRect(15, -1, 3, 2); ctx.fillRect(20, 0, 2, 2);
-        ctx.fillStyle = '#ce9470'; ctx.fillRect(19, 3, 3, 3);
-        ctx.fillStyle = '#9a5f46'; ctx.fillRect(16, 7, 5, 1);
         ctx.restore();
+
+        // 2. Dialogue bubble (Isolated from horizontal flip scale)
         if (this.dialogueTimer > 0) {
-            ctx.fillStyle = 'white'; ctx.fillRect(sx - 15, sy - 52, 120, 18);
-            ctx.fillStyle = '#333'; ctx.font = '11px sans-serif';
-            ctx.fillText(this.dialogue, sx - 10, sy - 38);
+            ctx.save();
+            ctx.translate(sx + 15, sy - bob); 
+            ctx.font = 'bold 11px sans-serif';
+            const maxWidth = 130;
+            const words = this.dialogue.split(' ');
+            const lines = [];
+            let currentLine = words[0];
+
+            for (let i = 1; i < words.length; i++) {
+                if (ctx.measureText(currentLine + " " + words[i]).width < maxWidth) {
+                    currentLine += " " + words[i];
+                } else {
+                    lines.push(currentLine);
+                    currentLine = words[i];
+                }
+            }
+            lines.push(currentLine);
+
+            const lineHt = 14;
+            const bh = lines.length * lineHt + 12;
+            let maxLineW = 0;
+            lines.forEach(l => maxLineW = Math.max(maxLineW, ctx.measureText(l).width));
+            const bw = maxLineW + 20;
+            const bx = -bw / 2, by = -45 - bh;
+            
+            // Glass bubble (Adjusted to 70% opacity / 30% transparent)
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 10); ctx.fill();
+            
+            // Pointer
+            ctx.beginPath(); ctx.moveTo(0, by + bh); ctx.lineTo(-5, by + bh + 8); ctx.lineTo(5, by + bh); ctx.fill();
+            
+            ctx.fillStyle = '#111'; ctx.textAlign = 'center';
+            lines.forEach((line, idx) => {
+                ctx.fillText(line, 0, by + 16 + idx * lineHt);
+            });
+            ctx.restore();
         }
     }
 }
@@ -1156,9 +1724,11 @@ class NPC {
 // ─── WORKER ───────────────────────────────────────────────────────────────────
 class Worker {
     constructor(world, x) {
-        this.world = world; this.x = x; this.y = 0; this.vx = 0; this.vy = 0;
+        this.world = world; this.x = x; this.y = world.groundY - 60; this.vx = 0; this.vy = 0;
         this.facingRight = true; this.time = 0; this.state = 'idle';
         this.targetTree = null; this.chopTimer = 0; this.carryingLogs = 0;
+        this.hairStyle = Math.random() > 0.5 ? 'spiky' : 'normal';
+        this.hairColor = ['#5a3826', '#333333', '#884422', '#cca444'][Math.floor(Math.random()*4)];
         this.maxHp = 40; this.hp = 40; this.dead = false;
         this.tunicColor = '#b57b45';
         this.dialogueTimer = 0; this.dialogue = ''; this.hurtTimer = 0;
@@ -1200,7 +1770,7 @@ class Worker {
                 this.vx = 0; this.state = 'chopping';
             } else {
                 const dir = Math.sign(this.targetTree.x - this.x);
-                this.vx = dir * 100; this.facingRight = dir > 0;
+                this.vx = dir * 80; this.facingRight = dir > 0;
             }
         } else if (this.state === 'chopping') {
             if (!this.targetTree || this.targetTree.dead) {
@@ -1224,7 +1794,7 @@ class Worker {
                 this.state = 'idle';
             } else {
                 const dir = Math.sign(outX - this.x);
-                this.vx = dir * 100; this.facingRight = dir > 0;
+                this.vx = dir * 80; this.facingRight = dir > 0;
             }
         }
         this.x += this.vx * dt;
@@ -1253,30 +1823,62 @@ class Worker {
         ctx.fill();
         ctx.fillStyle = '#5a3820'; ctx.fillRect(4, 39, 22, 4);
         ctx.fillStyle = '#d7b36a'; ctx.fillRect(8, 24, 14, 3);
+        ctx.fillStyle = this.hairColor;
+        if (this.hairStyle === 'spiky') {
+            ctx.beginPath();
+            ctx.moveTo(5, 5); ctx.lineTo(8, -16); ctx.lineTo(12, -8);
+            ctx.lineTo(15, -20); ctx.lineTo(18, -8);
+            ctx.lineTo(24, -16); ctx.lineTo(26, 5);
+            ctx.closePath(); ctx.fill();
+        } else {
+            ctx.beginPath();
+            ctx.moveTo(5, 5); ctx.quadraticCurveTo(5, -16, 15, -14); ctx.quadraticCurveTo(25, -16, 26, 5); ctx.lineTo(15, 10); ctx.closePath();
+            ctx.fill();
+        }
         ctx.fillStyle = '#f1c6a3'; ctx.fillRect(12, 12, 6, 5);
         ctx.fillStyle = '#f4caaa';
         ctx.beginPath(); ctx.ellipse(15, 2, 11, 12, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#7c5432';
-        ctx.beginPath();
-        ctx.moveTo(6, 2); ctx.quadraticCurveTo(8, -8, 15, -11); ctx.quadraticCurveTo(21, -8, 24, 0); ctx.lineTo(24, 6); ctx.lineTo(6, 6); ctx.closePath();
-        ctx.fill();
         ctx.fillStyle = '#caa05f'; ctx.fillRect(5, -4, 20, 4);
         ctx.fillStyle = '#75512d'; ctx.fillRect(3, -2, 24, 6);
         ctx.fillStyle = '#e2b18f';
         ctx.beginPath(); ctx.ellipse(7, 3, 2, 3, 0, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = '#2b1a12'; ctx.fillRect(15, -1, 3, 2); ctx.fillRect(20, 0, 2, 2);
-        ctx.fillStyle = '#ce9470'; ctx.fillRect(19, 3, 3, 3);
-        ctx.fillStyle = '#9a5f46'; ctx.fillRect(16, 7, 5, 1);
 
         if (this.state === 'chopping') {
             ctx.translate(20, 15);
-            ctx.rotate(Math.sin(this.time * 10) * 0.8);
-            ctx.fillStyle = '#6b4826'; ctx.fillRect(-2, -2, 7, 18);
-            ctx.fillStyle = '#f1c6a3'; ctx.fillRect(-1, 15, 6, 6);
-            ctx.fillStyle = '#8a5b34'; ctx.fillRect(1, -10, 4, 24);
-            ctx.fillStyle = '#b9bcc1'; ctx.fillRect(-5, -12, 16, 8);
-            ctx.fillStyle = '#d7dbdf';
-            ctx.beginPath(); ctx.moveTo(4, -12); ctx.lineTo(12, -6); ctx.lineTo(4, -2); ctx.fill();
+            // Swing arc based on the 0-1.0 chopTimer
+            const swingIdx = this.chopTimer / 1.0; 
+            const swingAngle = -1.8 + Math.pow(swingIdx, 1.5) * 2.4; 
+            ctx.rotate(swingAngle);
+            
+            // Arm sleeve & hand
+            ctx.fillStyle = this.tunicColor; ctx.fillRect(-2, -2, 7, 18);
+            ctx.fillStyle = '#f1c6a3'; ctx.fillRect(-1, 15, 5, 5);
+            
+            // Axe Handle - Made longer (approx length 35)
+            ctx.fillStyle = '#654321'; ctx.fillRect(1, -25, 3, 40);
+            
+            // Axe Head - Back blunt (now on the opposite side of blade)
+            ctx.fillStyle = '#8d949c'; ctx.fillRect(-2, -13, 3, 8);
+            
+            // Axe Head - Main flared triangular blade (Flipped to point FORWARD)
+            ctx.fillStyle = '#adb2b8';
+            ctx.beginPath();
+            ctx.moveTo(4, -13);        // Inner top
+            ctx.lineTo(16, -21);       // Upper point
+            ctx.lineTo(19, -9);        // Center edge
+            ctx.lineTo(15, 1);         // Lower point
+            ctx.lineTo(4, -5);         // Inner bottom
+            ctx.closePath(); ctx.fill();
+
+            // Bright edge detail (Flipped to point FORWARD)
+            ctx.fillStyle = '#dde1e4';
+            ctx.beginPath();
+            ctx.moveTo(15, -18);
+            ctx.lineTo(19, -9);
+            ctx.lineTo(15, -3);
+            ctx.lineTo(16, -9);
+            ctx.closePath(); ctx.fill();
         } else if (this.carryingLogs > 0) {
             ctx.fillStyle = '#6b4826'; ctx.fillRect(24, 20, 5, 14);
             ctx.fillStyle = '#f1c6a3'; ctx.fillRect(24, 33, 5, 5);
@@ -1306,13 +1908,15 @@ class Worker {
 // ─── SOLDIER ──────────────────────────────────────────────────────────────────
 class Soldier {
     constructor(world, x) {
-        this.world = world; this.x = x; this.y = 0; this.vx = 0; this.vy = 0;
+        this.world = world; this.x = x; this.y = world.groundY - 60; this.vx = 0; this.vy = 0;
         this.facingRight = true; this.time = 0;
         this.maxHp = 100; this.hp = 100;
         this.dead = false; this.following = false;
         this.guardX = x; this.attackCd = 0; this.state = 'idle';
         this.dialogue = ''; this.dialogueTimer = 0; this.hurtTimer = 0;
         this.spawnWalkTimer = 1.5;
+        this.attackTimer = 0;
+        this.attackTarget = null;
     }
     takeDamage(dmg) {
         this.hp -= dmg; triggerHitGlow(this); sfx.playHit();
@@ -1323,6 +1927,14 @@ class Soldier {
         this.vy += 1200 * dt; this.y += this.vy * dt;
         if (this.y > this.world.groundY - 60) { this.y = this.world.groundY - 60; this.vy = 0; }
         if (this.attackCd > 0) this.attackCd -= dt;
+        if (this.attackTimer > 0) {
+            const oldT = this.attackTimer;
+            this.attackTimer -= dt;
+            // Deal damage at the peak of the thrust (when timer crosses 0.3s)
+            if (oldT >= 0.3 && this.attackTimer < 0.3 && this.attackTarget && !this.attackTarget.dead) {
+                this.attackTarget.takeDamage(22);
+            }
+        }
         if (this.dialogueTimer > 0) this.dialogueTimer -= dt;
         if (this.hurtTimer > 0) this.hurtTimer -= dt;
 
@@ -1342,10 +1954,27 @@ class Soldier {
         }
 
         if (nearestEnemy) {
-            const dir = Math.sign(nearestEnemy.x - this.x);
-            this.vx = dir * 150; this.facingRight = dir > 0; this.state = 'walk';
-            if (nearestDist < 65 && this.attackCd <= 0) {
-                this.attackCd = 1.0; nearestEnemy.takeDamage(22);
+            // Latch direction and stop movement during attacks to prevent jitter
+            if (this.attackTimer <= 0) {
+                const dir = Math.sign(nearestEnemy.x - this.x);
+                this.facingRight = dir > 0;
+                
+                // Stop moving once in comfortable strike range
+                if (nearestDist > 60) {
+                    this.vx = dir * 150;
+                    this.state = 'walk';
+                } else {
+                    this.vx = 0;
+                    this.state = 'idle';
+                }
+            } else {
+                this.vx = 0; // Commit to the strike position
+            }
+
+            if (nearestDist < 85 && this.attackCd <= 0 && this.attackTimer <= 0) {
+                this.attackCd = 1.2;
+                this.attackTimer = 0.6;
+                this.attackTarget = nearestEnemy;
                 const lines = ['For the king!', 'Take that!', 'Back, foul creature!', 'Hiyah!'];
                 this.dialogue = lines[Math.floor(Math.random() * lines.length)]; this.dialogueTimer = 1.5;
             }
@@ -1384,10 +2013,44 @@ class Soldier {
         ctx.fillStyle = '#d8b536';
         ctx.beginPath(); ctx.moveTo(15, 21); ctx.lineTo(19, 25); ctx.lineTo(15, 29); ctx.lineTo(11, 25); ctx.closePath(); ctx.fill();
         ctx.fillStyle = '#5a4415'; ctx.fillRect(4, 39, 22, 4);
-        ctx.fillStyle = '#244116'; ctx.fillRect(24, 19, 5, 17);
-        ctx.fillStyle = '#f1c6a3'; ctx.fillRect(24, 34, 5, 5);
-        ctx.fillStyle = '#aeb4bc'; ctx.fillRect(25, 39, 3, 19);
-        ctx.fillStyle = '#d8b536'; ctx.fillRect(21, 39, 10, 3);
+        
+        // --- Spear Rotation & Thrust Logic ---
+        let thrustX = 0;
+        let spearAngle = -1.1; // Default vertical-ish angle
+        if (this.attackTimer > 0) {
+            const p = (0.6 - this.attackTimer) / 0.6;
+            // Rapidly transition from vertical to horizontal in first 20%
+            const angleDone = Math.min(1, p / 0.2);
+            spearAngle = -1.1 * (1 - angleDone);
+            // Thrust peak at mid-point (0.3s)
+            thrustX = Math.sin(p * Math.PI) * 38;
+        }
+
+        ctx.save();
+        // Pivot spear around a shoulder-height central point
+        ctx.translate(15, 30);
+        ctx.rotate(spearAngle);
+        
+        // Arms (holding the spear relative to its rotation)
+        // Back Arm
+        ctx.fillStyle = '#244116'; ctx.fillRect(-12 + thrustX * 0.2, 0, 5, 12);
+        ctx.fillStyle = '#f1c6a3'; ctx.fillRect(-12 + thrustX * 0.2, 12, 5, 5);
+        // Front Arm
+        ctx.fillStyle = '#244116'; ctx.fillRect(8 + thrustX * 0.8, 0, 5, 12);
+        ctx.fillStyle = '#f1c6a3'; ctx.fillRect(8 + thrustX * 0.8, 12, 5, 5);
+
+        // Spear Shaft (long wooden pole)
+        ctx.fillStyle = '#654321'; ctx.fillRect(-15 + thrustX, 10, 85, 4);
+        // Spear Tip (metallic sharp point)
+        ctx.fillStyle = '#bbb'; 
+        ctx.beginPath(); 
+        ctx.moveTo(70 + thrustX, 7); 
+        ctx.lineTo(88 + thrustX, 12); 
+        ctx.lineTo(70 + thrustX, 17); 
+        ctx.fill();
+
+        ctx.restore();
+        
         ctx.fillStyle = '#f4caab'; ctx.fillRect(12, 12, 6, 5);
         ctx.beginPath(); ctx.ellipse(15, 2, 11, 12, 0, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = '#9098a2';
@@ -1431,6 +2094,236 @@ class Soldier {
     }
 }
 
+// ─── PIKE ─────────────────────────────────────────────────────────────────────
+class Pike {
+    constructor(world, startX, startY, targetX, targetY) {
+        this.world = world; this.x = startX; this.y = startY;
+        const angle = Math.atan2(targetY - startY, targetX - startX);
+        const speed = 400;
+        this.vx = Math.cos(angle) * speed;
+        this.vy = Math.sin(angle) * speed;
+        this.dead = false; this.life = 2.0; this.angle = angle;
+    }
+    update(dt) {
+        if (this.dead) return;
+        this.life -= dt;
+        if (this.life <= 0) { this.dead = true; return; }
+        
+        this.vy += 700 * dt; // Gravity effect for natural curve
+        this.x += this.vx * dt; this.y += this.vy * dt;
+        this.angle = Math.atan2(this.vy, this.vx); // Rotate to face velocity
+        
+        if (this.y > this.world.groundY) { this.dead = true; return; }
+        
+        // ... rest of update collision logic ...
+        // Check collisions with Enemies
+        for (const e of this.world.enemies) {
+            if (e.dead) continue;
+            if (Math.abs(e.x - this.x) < 30 && Math.abs(e.y - 20 - this.y) < 40) {
+                e.takeDamage(20); this.dead = true;
+                for (let i = 0; i < 5; i++) this.world.particles.push(new Particle(this.x, this.y, '#e0e0e0'));
+                return;
+            }
+        }
+        // Check collisions with Animals
+        for (const a of this.world.animals) {
+            if (a.dead) continue;
+            // Increased radius (35x30) to help hit small animals like rabbits
+            if (Math.abs(a.x - this.x) < 35 && Math.abs(a.y - 10 - this.y) < 30) {
+                a.takeDamage(25); this.dead = true;
+                for (let i = 0; i < 5; i++) this.world.particles.push(new Particle(this.x, this.y, '#c8102e'));
+                return;
+            }
+        }
+    }
+    draw(ctx, cam) {
+        if (this.dead) return;
+        const sx = this.x - cam.x, sy = this.y;
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(this.angle);
+        // Larger size (length 35) to match hunter's hand
+        ctx.fillStyle = '#654321'; ctx.fillRect(-17.5, -1.5, 35, 3);
+        ctx.fillStyle = '#ddd'; ctx.beginPath(); ctx.moveTo(17.5, -3); ctx.lineTo(17.5, 3); ctx.lineTo(25, 0); ctx.fill();
+        ctx.restore();
+    }
+}
+
+// ─── HUNTER ───────────────────────────────────────────────────────────────────
+class Hunter {
+    constructor(world, x, preferredSide = 1) {
+        this.world = world; this.x = x; this.y = world.groundY - 60;
+        this.vx = 0; this.vy = 0; this.facingRight = true; this.state = 'idle';
+        this.time = Math.random() * 10;
+        this.hp = 40; this.maxHp = 40; this.dead = false;
+        this.attackCd = 0; this.meatCount = 0;
+        this.pikeHideTimer = 0;
+        this.preferredSide = preferredSide; // 1 for Right, -1 for Left
+        this.currentTarget = null;
+        this.failedAttempts = 0;
+    }
+    takeDamage(dmg) {
+        this.hp -= dmg; triggerHitGlow(this); sfx.playHit();
+        if (this.hp <= 0) this.dead = true;
+    }
+    update(dt) {
+        if (this.dead) return;
+        this.time += dt;
+        if (this.pikeHideTimer > 0) this.pikeHideTimer -= dt;
+        this.vy += 1200 * dt; this.y += this.vy * dt;
+        if (this.y > this.world.groundY - 60) { this.y = this.world.groundY - 60; this.vy = 0; }
+        if (this.attackCd > 0) this.attackCd -= dt;
+
+        if (this.meatCount >= 3 || (this.meatCount > 0 && !this.world.animals.some(a=>!a.dead) && !this.world.groundItems.some(i=>i.type==='meat'&&!i.picked))) {
+            const outX = this.world.outpost.x;
+            const d = Math.abs(outX - this.x);
+            if (d < 50) {
+                this.vx = 0;
+                // Drop all collected meat
+                for (let i = 0; i < this.meatCount; i++) {
+                    this.world.groundItems.push(new GroundItem(this.world, this.x + (Math.random() - 0.5) * 40, this.world.groundY - 16, 'meat'));
+                }
+                this.meatCount = 0;
+                this.state = 'idle';
+            } else {
+                const dir = Math.sign(outX - this.x);
+                this.vx = dir * 112; this.facingRight = dir > 0;
+                this.state = 'walk';
+            }
+        } else {
+            let targetEnemy = null; let bestEDist = Infinity;
+            for (const e of this.world.enemies) {
+                if (e.dead) continue;
+                let d = Math.abs(e.x - this.x);
+                if (d < bestEDist && d < 450) { bestEDist = d; targetEnemy = e; }
+            }
+            
+            let targetAnimal = null; let bestADist = Infinity;
+            if (!targetEnemy) {
+                for (const a of this.world.animals) {
+                    if (a.dead) continue;
+                    // If we've missed this target too many times, skip it for a farther one
+                    if (this.failedAttempts >= 2 && a === this.currentTarget && this.world.animals.filter(aa=>!aa.dead).length > 1) continue; 
+                    let d = Math.abs(a.x - this.x);
+                    if (d < bestADist && d < 2000) { bestADist = d; targetAnimal = a; }
+                }
+            }
+            
+            let targetMeat = null; let bestMDist = Infinity;
+            if (!targetEnemy && !targetAnimal) {
+                for (const m of this.world.groundItems) {
+                    // Ignore meat near outpost so the hunter does not loop picking it back up 
+                    if (m.type === 'meat' && !m.picked && Math.abs(m.x - this.world.outpost.x) > 120) {
+                        let d = Math.abs(m.x - this.x);
+                        if (d < bestMDist && d < 2500) { bestMDist = d; targetMeat = m; }
+                    }
+                }
+            }
+
+            if (targetEnemy) {
+                if (bestEDist < 250) {
+                    this.vx = 0; this.state = 'idle'; this.facingRight = targetEnemy.x > this.x;
+                    if (this.attackCd <= 0) {
+                        this.attackCd = 1.6;
+                        this.pikeHideTimer = 0.5; // Throw animation: hide pike in hand
+                        // Throw at a slight upward arc
+                        this.world.arrows.push(new Pike(this.world, this.x, this.y - 20, targetEnemy.x, targetEnemy.y - 120));
+                    }
+                } else {
+                    const dir = Math.sign(targetEnemy.x - this.x);
+                    this.vx = dir * 96; this.facingRight = dir > 0; this.state = 'walk';
+                }
+            } else if (targetAnimal) {
+                if (this.currentTarget !== targetAnimal) { this.currentTarget = targetAnimal; this.failedAttempts = 0; }
+                if (bestADist < 250) {
+                    this.vx = 0; this.state = 'idle'; this.facingRight = targetAnimal.x > this.x;
+                    if (this.attackCd <= 0) {
+                        this.attackCd = 1.4;
+                        this.pikeHideTimer = 0.5; // Throw animation: hide pike in hand
+                        this.failedAttempts++; // Track attempt
+                        // Throw at a slight upward arc
+                        this.world.arrows.push(new Pike(this.world, this.x, this.y - 20, targetAnimal.x, targetAnimal.y - 120));
+                    }
+                } else {
+                    const dir = Math.sign(targetAnimal.x - this.x);
+                    this.vx = dir * 96; this.facingRight = dir > 0; this.state = 'walk';
+                }
+            } else if (targetMeat) {
+                if (bestMDist < 40) {
+                    this.vx = 0; targetMeat.picked = true; this.meatCount++; this.state = 'idle';
+                } else {
+                    const dir = Math.sign(targetMeat.x - this.x);
+                    this.vx = dir * 104; this.facingRight = dir > 0; this.state = 'walk';
+                }
+            } else {
+                // Return to their preferred side of the outpost
+                const baseOffset = this.preferredSide * 150; 
+                const outX = this.world.outpost.x + baseOffset;
+                const d = Math.abs(this.x - outX);
+                if (d > 30) {
+                    const dir = Math.sign(outX - this.x);
+                    this.vx = dir * 72; this.facingRight = dir > 0; this.state = 'walk';
+                } else {
+                    this.vx = 0; this.state = 'idle';
+                }
+            }
+        }
+        this.x += this.vx * dt;
+    }
+    draw(ctx, cam) {
+        if (this.dead) return;
+        const sx = this.x - cam.x, sy = this.y;
+        const bob = this.state === 'walk' ? Math.abs(Math.sin(this.time * 12)) * 3 : Math.sin(this.time * 2);
+        ctx.save();
+        applyHitGlow(ctx, this);
+        ctx.translate(sx, sy - bob);
+        if (!this.facingRight) { ctx.translate(30, 0); ctx.scale(-1, 1); }
+        const ls = this.state === 'walk' ? Math.sin(this.time * 12) * 5 : 0;
+        
+        ctx.fillStyle = '#222'; ctx.fillRect(6 - ls, 42, 7, 16); ctx.fillRect(17 + ls, 42, 7, 16);
+        ctx.fillStyle = '#4c5c44'; ctx.fillRect(1, 19, 5, 17);
+        ctx.fillStyle = '#f1c6a3'; ctx.fillRect(1, 34, 5, 5);
+        ctx.fillStyle = '#657b59'; 
+        ctx.beginPath(); ctx.moveTo(4, 16); ctx.lineTo(26, 16); ctx.lineTo(30, 40); ctx.lineTo(24, 44); ctx.lineTo(6, 44); ctx.lineTo(0, 40); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#3a2d21'; 
+        ctx.beginPath(); ctx.moveTo(11, 17); ctx.lineTo(19, 17); ctx.lineTo(21, 41); ctx.lineTo(9, 41); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#4a3a2a'; ctx.fillRect(4, 39, 22, 4);
+        ctx.fillStyle = '#6b4826'; ctx.fillRect(-4, 20, 10, 16);
+        ctx.fillStyle = '#f1c6a3'; ctx.fillRect(12, 12, 6, 5);
+        ctx.fillStyle = '#f4caab'; ctx.beginPath(); ctx.ellipse(15, 2, 11, 12, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#3f4c38'; ctx.beginPath(); ctx.arc(15, 0, 12, Math.PI, 0); ctx.fill(); ctx.fillRect(3, -2, 24, 6);
+        ctx.fillStyle = '#2b1a12'; ctx.fillRect(15, -1, 3, 2); ctx.fillRect(20, 0, 2, 2); 
+        ctx.fillStyle = '#4c5c44'; ctx.fillRect(24, 19, 5, 17);
+        ctx.fillStyle = '#f1c6a3'; ctx.fillRect(24, 34, 5, 5);
+
+        if (this.meatCount > 0) {
+            ctx.fillStyle = '#c8102e'; 
+            for (let i = 0; i < this.meatCount; i++) {
+                ctx.fillRect(18 - i * 4, 25 - i * 4, 12, 8); // Offset each meat block to show count
+            }
+        } else if (this.pikeHideTimer <= 0) {
+            ctx.fillStyle = '#654321'; ctx.fillRect(25, 10, 4, 35);
+            ctx.fillStyle = '#ddd'; ctx.beginPath(); ctx.moveTo(25, 10); ctx.lineTo(29, 10); ctx.lineTo(27, -5); ctx.fill();
+        }
+
+        ctx.restore();
+        
+        // Removed HUNTER label as per request
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#004400'; ctx.fillRect(sx - 5, sy - 18, 30, 4);
+        const hpRatio = this.hp / this.maxHp;
+        ctx.fillStyle = hpRatio > 0.5 ? '#00cc00' : hpRatio > 0.25 ? '#f5a623' : '#e00';
+        ctx.fillRect(sx - 5, sy - 18, hpRatio * 30, 4);
+        if (this.hp < this.maxHp && this.world && this.world.game && this.world.game.player) {
+            const player = this.world.game.player;
+            if (Math.abs(this.x - player.x) < 70 && player.inventory.wheat > 0) {
+                ctx.fillStyle = '#8f8'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+                ctx.fillText('[H] Heal', sx + 10, sy - 25); ctx.textAlign = 'left';
+            }
+        }
+    }
+}
+
 // ─── PLAYER CHARACTER ─────────────────────────────────────────────────────────
 class Character {
     constructor(world) {
@@ -1441,7 +2334,8 @@ class Character {
         this.maxStamina = 100; this.stamina = 100;
         this.actionTimer = 0; this.invincibleTimer = 0;
         this.hurtTimer = 0;
-        this.inventory = { gold: 30, wood: 0, hasAxe: false, hasSword: false, wheat: 0, hasHammer: false };
+        this.hammerChargeTimer = 0;
+        this.inventory = { gold: 30, wood: 0, hasAxe: false, hasSword: false, wheat: 0, hasHammer: false, meat: 0 };
     }
     toSave() {
         return {
@@ -1469,6 +2363,12 @@ class Character {
         if (this.invincibleTimer > 0) return;
         this.hp = Math.max(0, this.hp - dmg);
         this.invincibleTimer = 1.2; this.hurtTimer = 0.3; triggerHitGlow(this, 0.3);
+        /*
+        if (Math.random() < 0.3) {
+            this.x += (this.facingRight ? -1 : 1) * 35; // Knockback effect
+            this.actionTimer = 0.3; // Stun effect
+        }
+        */
         sfx.playHurt();
     }
     update(dt, input) {
@@ -1492,6 +2392,29 @@ class Character {
         } else { this.state = 'action'; }
         this.x += this.vx * dt;
         if (this.x < -2000) this.x = -2000; // allow left exploration
+
+        // Hammer Charge Logic (Tap for melee, Hold for Fireball)
+        if (this.weapon === 'hammer' && this.hp > 0 && this.actionTimer <= 0) {
+            if (input.isDown('KeyE')) {
+                this.hammerChargeTimer += dt;
+                if (this.hammerChargeTimer >= 1.0) {
+                    this.hammerChargeTimer = 0;
+                    this.actionTimer = 0.5; // Trigger swing animation
+                    const fbX = this.x + (this.facingRight ? 40 : -40);
+                    const fbY = this.y + 10; 
+                    this.world.heroProjectiles.push(new HeroFireball(this.world, fbX, fbY, this.facingRight));
+                    sfx.beep(400, 'sawtooth', 0.3, 0.4); sfx.beep(100, 'square', 0.2, 0.3, 0.05);
+                }
+            } else if (input.justReleased('KeyE')) {
+                // If released before 1.0s, perform a regular melee swing/interaction
+                if (this.hammerChargeTimer > 0 && this.hammerChargeTimer < 1.0) {
+                    this.world._handleE(this, true); 
+                }
+                this.hammerChargeTimer = 0;
+            } else {
+                this.hammerChargeTimer = 0;
+            }
+        }
         // Pick up ground items
         for (const item of this.world.groundItems) {
             if (item.picked) continue;
@@ -1499,6 +2422,7 @@ class Character {
                 item.picked = true; sfx.playPickup();
                 if (item.type === 'wheat') this.inventory.wheat += 1;
                 else if (item.type === 'log') this.inventory.wood += 1;
+                else if (item.type === 'meat') this.inventory.meat += 1;
                 else this.inventory.gold += (item.value || 1);
             }
         }
@@ -1511,8 +2435,8 @@ class Character {
         if (wp === 'fists') return null; // handled specially in draw
         const totalTime = wp === 'sword' ? 0.35 : 0.5;
         const progress = 1 - (this.actionTimer / totalTime); // 0→1
-        if (wp === 'sword') return -1.5 + progress * 3.0; // horizontal slash
-        return -2.0 + progress * 3.0; // axe overhead chop
+        if (wp === 'sword') return -3.0 + progress * 2.5; // forward slash
+        return -3.0 + progress * 3.0; // overhead chop from top to bottom
     }
     // Punch progress 0→1 during fist action
     _punchProgress() {
@@ -1531,8 +2455,58 @@ class Character {
         ctx.save();
         // Hurt flash
         if (this.hurtTimer > 0) ctx.globalAlpha = flashAlpha;
-        applyHitGlow(ctx, this, '255,214,120');
+        applyHitGlow(ctx, this);
         ctx.translate(sx, sy - bob);
+
+        // --- Charge Progress UI & Inferno Aura (Flashing Fire) ---
+        const chargeRatio = Math.min(1.0, this.hammerChargeTimer / 1.0);
+        if (chargeRatio > 0 && this.weapon === 'hammer') {
+            const t = this.time;
+            const flicker = 0.7 + Math.sin(t * 30) * 0.3; // Rapid heat flicker
+            
+            ctx.save();
+            // 1. Radiant Body Aura (Additive glow)
+            ctx.globalCompositeOperation = 'lighter';
+            const auraG = ctx.createRadialGradient(15, 20, 5, 15, 20, 45 + chargeRatio * 25);
+            auraG.addColorStop(0, `rgba(255, 160, 0, ${0.8 * chargeRatio * flicker})`);
+            auraG.addColorStop(0.5, `rgba(255, 60, 0, ${0.4 * chargeRatio * flicker})`);
+            auraG.addColorStop(1, 'rgba(255, 0, 0, 0)');
+            ctx.fillStyle = auraG;
+            ctx.beginPath(); ctx.arc(15, 20, 70, 0, Math.PI * 2); ctx.fill();
+            
+            // 2. Spiraling Flame Licks
+            ctx.fillStyle = `rgba(255, 220, 0, ${0.7 * chargeRatio * flicker})`;
+            for (let i = 0; i < 5; i++) {
+                const ang = (t * 8) + (i * Math.PI * 2 / 5);
+                const distX = 22 + Math.sin(t * 10 + i) * 5;
+                const distY = 32 + Math.cos(t * 10 + i) * 5;
+                const fx = 15 + Math.cos(ang) * distX, fy = 20 + Math.sin(ang) * distY;
+                ctx.beginPath();
+                ctx.moveTo(fx, fy);
+                ctx.lineTo(fx + (Math.random()-0.5)*15, fy - 15 - chargeRatio * 20);
+                ctx.lineTo(fx + 5, fy + 5);
+                ctx.fill();
+            }
+            ctx.restore();
+
+            // 3. Upward Rising Embers (Heat)
+            if (Math.random() < 0.2 + chargeRatio * 0.5) {
+                const px = this.x + (Math.random() - 0.5) * 50;
+                const py = this.y + 60 - Math.random() * 20;
+                this.world.particles.push(new Particle(px, py, '#ffaa00', (Math.random()-0.5)*30, -80 - Math.random()*120));
+            }
+
+            // 4. Horizontal Focus Bar
+            const barW = 50, barH = 6;
+            const bx = 15 - barW / 2, by = 62; 
+            ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(bx, by, barW, barH);
+            const fillCol = `hsl(${20 + chargeRatio * 20}, 100%, ${50 + chargeRatio * 30}%)`;
+            ctx.fillStyle = fillCol; ctx.fillRect(bx, by, barW * chargeRatio, barH);
+            if (chargeRatio >= 0.98) {
+                ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.strokeRect(bx, by, barW, barH);
+            }
+        }
+
         if (!this.facingRight) { ctx.translate(30, 0); ctx.scale(-1, 1); }
 
         // Cape
@@ -1583,17 +2557,75 @@ class Character {
                 ctx.fillStyle = '#d7b44a'; ctx.fillRect(-6, 20, 16, 4);
                 ctx.fillStyle = '#7b1520'; ctx.fillRect(0, 18, 5, 3);
             } else if (this.weapon === 'axe') {
-                ctx.fillStyle = '#654321'; ctx.fillRect(0, 22, 4, 28);
-                ctx.fillStyle = '#adb2b8'; ctx.fillRect(4, 42, 16, 12);
-                ctx.fillStyle = '#8d949c'; ctx.fillRect(-8, 42, 8, 12);
+                // Handle
+                ctx.fillStyle = '#654321'; ctx.fillRect(-4, 22, 4, 30);
+                
+                // Back blunt
+                ctx.fillStyle = '#8d949c'; ctx.fillRect(0, 38, 4, 12);
+                
+                // Main flared triangular double edge
+                ctx.fillStyle = '#adb2b8';
+                ctx.beginPath(); 
+                ctx.moveTo(-4, 38);      // Top inner socket
+                ctx.lineTo(-18, 30);     // Upper point
+                ctx.lineTo(-22, 44);     // Center edge
+                ctx.lineTo(-16, 54);     // Lower point
+                ctx.lineTo(-4, 50);      // Bottom inner socket
+                ctx.closePath(); ctx.fill();
+
+                // Bright edge detail
                 ctx.fillStyle = '#dde1e4';
-                ctx.beginPath(); ctx.moveTo(4, 42); ctx.lineTo(20, 48); ctx.lineTo(4, 54); ctx.fill();
+                ctx.beginPath(); 
+                ctx.moveTo(-17, 33);
+                ctx.lineTo(-22, 44);
+                ctx.lineTo(-16, 52);
+                ctx.lineTo(-18, 44);
+                ctx.closePath(); ctx.fill();
             } else if (this.weapon === 'hammer') {
-                ctx.fillStyle = '#3a2010'; ctx.fillRect(0, 22, 5, 40);
-                ctx.fillStyle = '#222'; ctx.fillRect(-15, 55, 35, 20);
-                ctx.fillStyle = '#ff4400'; ctx.fillRect(-15, 55, 35, 4);
-                ctx.fillStyle = '#ffaa00'; ctx.fillRect(-10, 55, 25, 2);
-                if (Math.random() < 0.2) this.world.particles.push(new Particle(this.x + (this.facingRight ? 40 : -40), this.y, '#ff4400'));
+                const t = this.world.game ? this.world.game.lastTime / 1000 : 0;
+                const chargeRatio = Math.min(1.0, this.hammerChargeTimer / 1.0);
+                const pulse = (0.8 + Math.sin(t * 8) * 0.2) + (chargeRatio * 0.6); // Intensify while charging
+                
+                // --- Obsidian Handle ---
+                ctx.fillStyle = '#1a1a1a'; ctx.fillRect(0, 22, 5, 40);
+                // Silver Banding
+                ctx.fillStyle = '#aaa'; 
+                ctx.fillRect(0, 25, 5, 2); ctx.fillRect(0, 35, 5, 2); ctx.fillRect(0, 45, 5, 2);
+                
+                // --- Massive Hammer Head (Inferno Stone) ---
+                const headX = -18, headY = 55, headW = 41, headH = 24;
+                ctx.fillStyle = '#222'; ctx.fillRect(headX, headY, headW, headH);
+                
+                // LAVA CRACKS (Animated Pulsing)
+                ctx.strokeStyle = `rgba(255, 120, 0, ${pulse})`; ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(headX + 5, headY + 5); ctx.lineTo(headX + 15, headY + 18);
+                ctx.moveTo(headX + 25, headY + 3); ctx.lineTo(headX + 20, headY + 20);
+                ctx.moveTo(headX + 35, headY + 8); ctx.lineTo(headX + 30, headY + 15);
+                ctx.stroke();
+                
+                // PULSING CORE GLOW
+                const cg = ctx.createRadialGradient(headX + headW/2, headY + headH/2, 2, headX + headW/2, headY + headH/2, 12);
+                cg.addColorStop(0, `rgba(255, 200, 0, ${pulse})`);
+                cg.addColorStop(0.5, `rgba(255, 100, 0, ${pulse * 0.6})`);
+                cg.addColorStop(1, 'transparent');
+                ctx.fillStyle = cg; ctx.fillRect(headX, headY, headW, headH);
+                
+                // Metallic Edges (Top and Bottom guards)
+                ctx.fillStyle = '#444'; 
+                ctx.fillRect(headX, headY, headW, 4);     // Top guard
+                ctx.fillRect(headX, headY + headH - 4, headW, 4); // Bottom guard
+                
+                // --- LICKING FLAMES (Animated) ---
+                ctx.fillStyle = '#ffaa00';
+                for (let i = 0; i < 4; i++) {
+                    const fX = headX + 5 + i * 10;
+                    const fH = 12 + Math.sin(t * 15 + i) * 6;
+                    ctx.beginPath();
+                    ctx.moveTo(fX, headY);
+                    ctx.quadraticCurveTo(fX + 5 + Math.sin(t * 10) * 3, headY - fH, fX + 10, headY);
+                    ctx.fill();
+                }
             }
         } else {
             // PUNCH animation — arm thrusts forward horizontally
@@ -1623,15 +2655,9 @@ class Character {
         // Head & Crown
         ctx.fillStyle = '#f4caab';
         ctx.beginPath(); ctx.ellipse(15, 2, 11, 12, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#8c6a3d';
-        ctx.beginPath();
-        ctx.moveTo(6, 0); ctx.quadraticCurveTo(8, -10, 15, -12); ctx.quadraticCurveTo(23, -10, 24, 1); ctx.lineTo(24, 6); ctx.lineTo(6, 6); ctx.closePath();
-        ctx.fill();
         ctx.fillStyle = '#e2b18f';
         ctx.beginPath(); ctx.ellipse(7, 3, 2, 3, 0, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = '#2b1a12'; ctx.fillRect(15, -1, 3, 2); ctx.fillRect(20, 0, 2, 2);
-        ctx.fillStyle = '#ce9470'; ctx.fillRect(19, 3, 3, 3);
-        ctx.fillStyle = '#9a5f46'; ctx.fillRect(16, 7, 5, 1);
         ctx.fillStyle = '#ffbc00';
         ctx.beginPath();
         ctx.moveTo(5, -4); ctx.lineTo(7, -14); ctx.lineTo(11, -8); ctx.lineTo(15, -16); ctx.lineTo(19, -8); ctx.lineTo(23, -14); ctx.lineTo(25, -4); ctx.closePath();
@@ -1684,19 +2710,33 @@ class Outpost {
             ctx.fillStyle = '#ffd700'; ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center';
             ctx.fillText('🏤 TOWN', sx, sy - 182); ctx.textAlign = 'left';
         } else {
-            // ── OUTPOST ──
-            ctx.fillStyle = '#f5deb3'; ctx.beginPath(); ctx.moveTo(sx, sy - 120); ctx.lineTo(sx - 80, sy); ctx.lineTo(sx + 80, sy); ctx.fill();
-            ctx.fillStyle = '#222'; ctx.beginPath(); ctx.moveTo(sx, sy - 60); ctx.lineTo(sx - 30, sy); ctx.lineTo(sx + 30, sy); ctx.fill();
-            ctx.fillStyle = '#5c4033'; ctx.fillRect(sx - 3, sy - 160, 6, 160);
-            const fl = Math.sin(this.time * 5) * 10;
-            ctx.fillStyle = '#c8102e'; ctx.beginPath(); ctx.moveTo(sx, sy - 160); ctx.lineTo(sx + 40 + fl, sy - 155); ctx.lineTo(sx + 40 + fl, sy - 140); ctx.lineTo(sx, sy - 145); ctx.fill();
-            ctx.beginPath();
+            // ── OUTPOST (Refugee Camp) ──
+            // Square Main Tent
+            ctx.fillStyle = '#6e5e4d'; ctx.fillRect(sx - 60, sy - 80, 100, 80);
+            ctx.fillStyle = '#5c4a3d'; ctx.fillRect(sx - 65, sy - 85, 110, 20); // Roof edge
+            ctx.beginPath(); ctx.moveTo(sx - 50, sy - 85); ctx.lineTo(sx - 10, sy - 130); ctx.lineTo(sx + 30, sy - 85); ctx.fill();
+            // Tent flap / open interior
+            ctx.fillStyle = '#3a2b1f'; ctx.fillRect(sx - 20, sy - 50, 40, 50);
+            // Campfire
+            const t = this.world.game ? this.world.game.lastTime / 1000 : 0;
+            ctx.fillStyle = '#3b2512'; ctx.fillRect(sx + 45, sy - 6, 25, 6);
+            ctx.fillStyle = '#ffaa00'; ctx.beginPath(); ctx.arc(sx + 57, sy - 6, 12 + Math.sin(t*15)*2, Math.PI, 0); ctx.fill();
+            ctx.fillStyle = '#ff4400'; ctx.beginPath(); ctx.arc(sx + 57, sy - 6, 6 + Math.sin(t*20)*2, Math.PI, 0); ctx.fill();
+            // Supply crates
+            ctx.lineWidth = 1; ctx.strokeStyle = '#3a2211';
+            ctx.fillStyle = '#8b5a2b'; ctx.fillRect(sx - 90, sy - 25, 25, 25); ctx.strokeRect(sx - 90, sy - 25, 25, 25);
+            ctx.fillRect(sx - 95, sy - 40, 20, 15); ctx.strokeRect(sx - 95, sy - 40, 20, 15);
+            // Flag pole
+            ctx.fillStyle = '#4a3622'; ctx.fillRect(sx - 40, sy - 180, 4, 95);
+            const fl = Math.sin(this.time * 6) * 10;
+            ctx.fillStyle = '#9e1a1a'; ctx.beginPath(); ctx.moveTo(sx - 36, sy - 170); ctx.lineTo(sx + 20 + fl, sy - 165); ctx.lineTo(sx + 15 + fl, sy - 150); ctx.lineTo(sx - 36, sy - 155); ctx.fill();
+
             // Upgrade hint
             const player = this.world.game.player;
             if (Math.abs(this.x - player.x) < 120) {
                 ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(sx - 110, sy - 185, 220, 22);
                 ctx.fillStyle = '#ffd700'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
-                ctx.fillText('Upgrade to Town 500G [T]', sx, sy - 169); ctx.textAlign = 'left';
+                ctx.fillText('Upgrade to Town 100G [T]', sx, sy - 169); ctx.textAlign = 'left';
             }
         }
         // HP bar
@@ -1732,32 +2772,57 @@ class Barrack {
         ctx.save();
         if (this.hitTimer > 0) ctx.translate(Math.sin(this.hitTimer * 60) * 3, 0);
         const isTown = this.world.outpost.level >= 2;
-        ctx.fillStyle = '#666'; ctx.fillRect(sx - 55, sy - 80, 110, 80);
-        ctx.fillStyle = '#555';
+        // Base structure
+        ctx.fillStyle = '#656b73'; ctx.fillRect(sx - 55, sy - 80, 110, 80); // main stone walls
+        // Crenellations (Castle teeth)
+        ctx.fillStyle = '#555b63';
         for (let i = -55; i < 60; i += 20) ctx.fillRect(sx + i, sy - 100, 14, 22);
-        ctx.fillStyle = '#3e2000'; ctx.fillRect(sx - 15, sy - 50, 30, 50);
-        ctx.fillStyle = '#a0500a'; ctx.beginPath(); ctx.arc(sx, sy - 50, 15, Math.PI, 0); ctx.fill();
+        // Stone texture lines
+        ctx.fillStyle = '#4c5259';
+        for(let j=0; j<4; j++) { ctx.fillRect(sx - 40, sy - 70 + j*15, 20, 2); ctx.fillRect(sx + 20, sy - 70 + j*15, 30, 2); ctx.fillRect(sx - 10, sy - 63 + j*15, 20, 2); }
+        // Archway Door
+        ctx.fillStyle = '#2b1a10'; ctx.fillRect(sx - 15, sy - 50, 30, 50);
+        ctx.beginPath(); ctx.arc(sx, sy - 50, 15, Math.PI, 0); ctx.fill();
+        ctx.fillStyle = '#111'; ctx.fillRect(sx - 10, sy - 45, 20, 45); // dark interior
+        
+        // Weapon Rack & Shields
+        ctx.fillStyle = '#4a2f1d'; ctx.fillRect(sx - 45, sy - 30, 15, 30); // rack
+        for(let i=0; i<3; i++) {
+            ctx.fillStyle = '#ccc'; ctx.fillRect(sx - 42 + i*4, sy - 35, 2, 25); // swords
+            ctx.fillStyle = '#8b4513'; ctx.fillRect(sx - 43 + i*4, sy - 15, 4, 5); // hilt
+        }
+        // Shield Stack
+        ctx.fillStyle = '#8b2222'; ctx.beginPath(); ctx.arc(sx + 40, sy - 15, 12, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#cecece'; ctx.beginPath(); ctx.arc(sx + 40, sy - 15, 4, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#6b1111'; ctx.beginPath(); ctx.arc(sx + 35, sy - 10, 12, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#cecece'; ctx.beginPath(); ctx.arc(sx + 35, sy - 10, 4, 0, Math.PI*2); ctx.fill();
+        
         ctx.fillStyle = isTown ? '#ffd700' : '#c8a000'; ctx.fillRect(sx - 35, sy - 98, 70, 15);
         ctx.fillStyle = '#000'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center';
         ctx.fillText(isTown ? 'BARRACKS★' : 'BARRACKS', sx, sy - 87); ctx.textAlign = 'left';
-        ctx.fillStyle = '#2e5b1e'; ctx.fillRect(sx + 55, sy - 130, 4, 55);
-        const fl = Math.sin(this.time * 4) * 8;
+        
+        // Main Fort Flag
+        ctx.fillStyle = '#3a2b1f'; ctx.fillRect(sx + 55, sy - 130, 4, 55);
+        const t = this.world.game ? this.world.game.lastTime / 1000 : 0;
+        const fl = Math.sin(t * 8) * 8;
+        ctx.fillStyle = '#8b1a1a';
         ctx.beginPath(); ctx.moveTo(sx + 59, sy - 130); ctx.lineTo(sx + 85 + fl, sy - 125); ctx.lineTo(sx + 85 + fl, sy - 110); ctx.lineTo(sx + 59, sy - 115); ctx.fill();
-        ctx.beginPath();
+        // Torch
+        ctx.fillStyle = '#333'; ctx.fillRect(sx + 20, sy - 40, 5, 15);
+        ctx.fillStyle = `rgba(255, 68, 0, ${0.8 + Math.sin(t*20)*0.2})`;
+        ctx.beginPath(); ctx.arc(sx + 22.5, sy - 45, 8 + Math.sin(t*15)*2, 0, Math.PI*2); ctx.fill();
         // Hire menu
         if (Math.abs(this.x - player.x) < 80) {
             if (isTown) {
                 // Show 2-option menu
-                ctx.fillStyle = 'rgba(0,0,0,0.88)'; ctx.fillRect(sx - 110, sy - 158, 220, 52);
+                ctx.fillStyle = 'rgba(0,0,0,0.88)'; ctx.fillRect(sx - 110, sy - 155, 220, 30);
                 ctx.fillStyle = '#0f0'; ctx.font = '13px sans-serif'; ctx.textAlign = 'center';
-                ctx.fillText('[1] Soldier 30G  [2] Archer 50G', sx, sy - 138);
-                ctx.fillStyle = '#aaa'; ctx.font = '11px sans-serif';
-                ctx.fillText('[E] to open menu', sx, sy - 118);
+                ctx.fillText('[1] Soldier 30G  [2] Archer 50G', sx, sy - 135);
                 ctx.textAlign = 'left';
             } else {
-                ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.fillRect(sx - 75, sy - 142, 150, 20);
+                ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.fillRect(sx - 75, sy - 155, 150, 30);
                 ctx.fillStyle = '#fff'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
-                ctx.fillText('Hire Soldier 30G [E]', sx, sy - 128);
+                ctx.fillText('[1] Soldier 30G', sx, sy - 135);
                 ctx.textAlign = 'left';
             }
         }
@@ -1770,6 +2835,165 @@ class Barrack {
         ctx.restore();
     }
 }
+
+// ─── ANIMAL ───────────────────────────────────────────────────────────────────
+class Animal {
+    constructor(world, x, type) {
+        this.world = world; this.x = x; this.y = world.groundY;
+        this.type = type; // 'rabbit' or 'deer'
+        this.vx = 0; this.vy = 0; this.facingRight = Math.random() > 0.5;
+        this.time = Math.random() * 10;
+        this.hp = type === 'deer' ? 20 : 10;
+        this.maxHp = this.hp;
+        this.dead = false; this.state = 'idle'; this.stateTimer = 0;
+        this.speed = type === 'deer' ? 90 : 120;
+    }
+    takeDamage(dmg) {
+        this.hp -= dmg; triggerHitGlow(this);
+        if (this.hp <= 0 && !this.dead) { 
+            this.dead = true; 
+            const meatCount = this.type === 'deer' ? 2 : 1;
+            for (let i = 0; i < meatCount; i++) {
+                this.world.groundItems.push(new GroundItem(this.world, this.x + (Math.random() - 0.5) * 20, this.world.groundY - 20, 'meat'));
+            }
+            for (let i = 0; i < 15; i++) this.world.particles.push(new Particle(this.x, this.y - 10, '#c8102e'));
+        } else {
+            // Panic run
+            this.state = 'run'; this.stateTimer = 2.0;
+            const attackerX = this.world.game.player.x;
+            this.vx = this.x > attackerX ? this.speed * 1.5 : -this.speed * 1.5;
+            this.facingRight = this.vx > 0;
+        }
+    }
+    update(dt) {
+        if (this.dead) return;
+        this.time += dt;
+        this.stateTimer -= dt;
+        
+        if (this.stateTimer <= 0) {
+            if (this.state === 'idle' || this.state === 'eating') {
+                const r = Math.random();
+                if (r < 0.5) {
+                    this.state = 'walk'; this.stateTimer = 1.5 + Math.random() * 2.0;
+                    this.vx = (Math.random() > 0.5 ? 1 : -1) * this.speed * 0.4;
+                    this.facingRight = this.vx > 0;
+                } else if (r < 0.8 && this.type === 'deer') {
+                    this.state = 'eating'; this.stateTimer = 3.0 + Math.random() * 4.0;
+                    this.vx = 0;
+                } else {
+                    this.state = 'idle'; this.stateTimer = 2.0 + Math.random() * 3.0;
+                    this.vx = 0;
+                }
+            } else {
+                this.state = 'idle'; this.stateTimer = 2.0 + Math.random() * 3.0;
+                this.vx = 0;
+            }
+        }
+        
+        this.x += this.vx * dt;
+        if (this.x < -1800) this.x = -1800;
+        if (this.x > 5000) this.x = 5000;
+    }
+    _drawLeg(ctx, x, y, angle, width, color) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.fillStyle = color;
+        // Joint 1: Thigh
+        ctx.rotate(angle * 0.4);
+        ctx.beginPath(); ctx.roundRect(-width/2, 0, width, 14, width/2); ctx.fill();
+        // Joint 2: Shin
+        ctx.translate(0, 14);
+        ctx.rotate(-angle * 0.6);
+        ctx.beginPath(); ctx.roundRect(-width/2, 0, width, 14, width/2); ctx.fill();
+        // Hoof
+        ctx.fillStyle = '#222'; ctx.fillRect(-width/2, 11, width+1, 4);
+        ctx.restore();
+    }
+    draw(ctx, cam) {
+        if (this.dead) return;
+        const sx = this.x - cam.x, sy = this.y;
+        ctx.save();
+        applyHitGlow(ctx, this);
+        const bob = (this.state === 'walk' || this.state === 'run') ? Math.abs(Math.sin(this.time * 12)) * 4 : 0;
+
+        // Species-specific Y alignment: Deer has long jointed legs, Rabbit is low to ground
+        const yOffset = this.type === 'deer' ? 24 : 0;
+        ctx.translate(sx, sy - bob - yOffset);
+
+        if (!this.facingRight) ctx.scale(-1, 1);
+        
+        if (this.type === 'rabbit') {
+            ctx.fillStyle = '#f0f0f0';
+            ctx.beginPath(); ctx.ellipse(0, -6, 8, 6, 0, 0, Math.PI*2); ctx.fill(); // body
+            ctx.beginPath(); ctx.ellipse(6, -10, 5, 5, 0, 0, Math.PI*2); ctx.fill(); // head
+            ctx.fillStyle = '#e8caca';
+            ctx.fillRect(5, -18, 2, 8); ctx.fillRect(1, -19, 2, 8); // ears
+            ctx.fillStyle = '#111'; ctx.fillRect(6, -11, 2, 2); // eye
+        } else if (this.type === 'deer') {
+            const color = '#8b5a2b';
+            const antlerColor = '#d4b798';
+            const walk = (this.state === 'walk' || this.state === 'run') ? Math.sin(this.time * 12) : 0;
+            
+            // Back Legs
+            this._drawLeg(ctx, -12, -4, walk, 3, color);
+            this._drawLeg(ctx, -4, -4, -walk, 3, color);
+
+            // Slim Anatomical Body
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.moveTo(-18, 0);
+            ctx.bezierCurveTo(-28, -10, -10, -25, 10, -20); // Slimmed back line
+            ctx.bezierCurveTo(24, -18, 28, -2, 20, 4);       // Chest flare
+            ctx.bezierCurveTo(10, 8, -10, 8, -18, 0);       // Tapered belly
+            ctx.closePath(); ctx.fill();
+
+            // Small Tail (with subtle flick)
+            ctx.fillStyle = '#d4b798';
+            ctx.save();
+            ctx.translate(-18, -2);
+            ctx.rotate(Math.sin(this.time * 5) * 0.2); 
+            ctx.beginPath(); ctx.ellipse(-2, 0, 4, 2.5, -0.2, 0, Math.PI * 2); ctx.fill();
+            ctx.restore();
+
+            // Neck & Head
+            ctx.save();
+            ctx.translate(18, -15);
+            // Lower neck if eating, else subtle sway
+            const isEating = this.state === 'eating';
+            const neckRot = isEating ? 1.0 + Math.sin(this.time * 20) * 0.03 : Math.sin(this.time * 2) * 0.05;
+            ctx.rotate(neckRot); 
+            ctx.beginPath(); // Neck curve
+            ctx.moveTo(0,0); ctx.quadraticCurveTo(4, -12, 10, -17);
+            ctx.lineTo(2, -23); ctx.quadraticCurveTo(-4, -12, -6, 4);
+            ctx.fill();
+
+            ctx.translate(8, -20); // Head Position
+            ctx.beginPath(); ctx.ellipse(0, 0, 8, 5, 0.4, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.ellipse(-4, -4, 5, 2, -0.8, 0, Math.PI * 2); ctx.fill(); // Ear
+            ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(2, -1, 1.2, 0, Math.PI * 2); ctx.fill(); // Eye
+
+            // Antlers (Majestic Stag style)
+            ctx.strokeStyle = antlerColor; ctx.lineWidth = 1.5; ctx.lineCap = 'round';
+            for (let i = 0; i < 2; i++) {
+                const side = i === 0 ? 1 : -1;
+                ctx.save(); ctx.translate(-2, -3);
+                ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(side * 4, -13);
+                for (let p=0; p < 4; p++) {
+                    ctx.moveTo(side * (1 + p), -4 - p * 2.5);
+                    ctx.lineTo(side * (6 + p * 1.5), -7 - p * 4);
+                }
+                ctx.stroke(); ctx.restore();
+            }
+            ctx.restore();
+
+            // Front Legs
+            this._drawLeg(ctx, 12, -4, -walk, 3, color);
+            this._drawLeg(ctx, 18, -4, walk, 3, color);
+        }
+        ctx.restore();
+    }
+}
+
 
 // ─── WORLD ────────────────────────────────────────────────────────────────────
 class World {
@@ -1788,8 +3012,8 @@ class World {
         for (let i = 0; i < 8; i++) this.clouds.push({ x: Math.random() * 5000, y: 50 + Math.random() * 150, w: 80 + Math.random() * 120, speed: 8 + Math.random() * 15 });
         // Foreground
         this.foregroundTrees = [];
-        // Right-side trees: original dense forest east of outpost
-        for (let i = 0; i < 8; i++) this.foregroundTrees.push(new ForegroundTree(this, 1400 + i * (180 + Math.random() * 120)));
+        // Right-side trees: forest east of outpost starting further away
+        for (let i = 0; i < 8; i++) this.foregroundTrees.push(new ForegroundTree(this, 1750 + i * (180 + Math.random() * 120)));
         // Left-side trees: forest west of starting zone, closer together
         const leftTreePositions = [];
         let lx = -200;
@@ -1800,20 +3024,57 @@ class World {
         for (const tx of leftTreePositions) this.foregroundTrees.push(new ForegroundTree(this, tx));
         this.axeShop = new Shop(this, 500, 'axe');
         this.sellShop = new Shop(this, 750, 'sell');
-        this.refugeShop = new Shop(this, 1300, 'refuge');
+        this.refugeShop = new Shop(this, 1450, 'refuge');
         this.hammerShop = new Shop(this, 1600, 'hammer');
+        
+        this.decorations = [];
+        for (let i = 0; i < 80; i++) {
+            const types = ['grass', 'flower'];
+            const dx = -2000 + Math.random() * 8000;
+            // Outpost is at x=1150 — avoid spawning decorations too close to it
+            if (Math.abs(dx - 1150) > 160) {
+                this.decorations.push(new Decoration(this, dx, types[Math.floor(Math.random() * 2)]));
+            }
+        }
         this.outpost = new Outpost(this, 1150);
         this.barracks = [new Barrack(this, 950)];
         this.farms = [];
         this.soldiers = [];
         this.archers = [];
+        this.birds = [];
+        // Spawn birds on random trees (1-4 birds per tree)
+        for (let i = 0; i < 6; i++) {
+            const tree = this.foregroundTrees[Math.floor(Math.random() * this.foregroundTrees.length)];
+            if (tree) {
+                const birdCount = Math.floor(Math.random() * 4) + 1;
+                for (let b = 0; b < birdCount; b++) {
+                    const bird = new Bird(this, tree);
+                    tree.perchedBirds.push(bird);
+                    this.birds.push(bird);
+                }
+            }
+        }
+        this.ladybugs = [];
+        // Ladybugs near flowers
+        for (const d of this.decorations) {
+            if (d.type === 'flower' && Math.random() < 0.3) {
+                this.ladybugs.push(new Ladybug(this, d));
+            }
+        }
         this.arrows = [];
+        this.heroProjectiles = [];
         this.woodBlocks = [];
         this.enemies = [];
+        this.animals = [];
+        for (let i = 0; i < 4; i++) {
+            const ax = 1500 + Math.random() * 2000;
+            this.animals.push(new Animal(this, ax, Math.random() > 0.5 ? 'deer' : 'rabbit'));
+        }
         this.groundItems = [];
         this.particles = [];
         this.npcs = [];
         this.workers = [];
+        this.hunters = [];
         for (let i = 0; i < 3; i++) this.npcs.push(new NPC(this, 950 + i * 80));
         this.waveTimer = 30;
         this.waveInterval = 180;
@@ -1829,6 +3090,7 @@ class World {
         this.meteorShowerActive = false;
         this.meteorShowerTimer = 0;
         this.meteorShowerBigPending = false;
+        this.huntersHiredCount = 0;
     }
     update(dt, input) {
         this.time += dt;
@@ -1876,6 +3138,15 @@ class World {
             this.rHoldTimer = 0;
         }
 
+        // Auto-detect nearest barrack for quick hiring (no 'E' required)
+        let nearestB = null;
+        let minDistB = 80;
+        for (const b of this.barracks) {
+            const d = Math.abs(b.x - player.x);
+            if (d < minDistB) { minDistB = d; nearestB = b; }
+        }
+        this.hiringBarrack = nearestB;
+
         if (input.justPressed('KeyR')) {
             if (distToSell < 60) {
                 // Single R at sell shop: sell 1 wheat for 3g
@@ -1889,14 +3160,59 @@ class World {
                 this._handleR(player);
             }
         }
+        
+        // Sell Meat Single (Y)
+        if (input.justPressed('KeyY')) {
+            if (distToSell < 60) {
+                if (player.inventory.meat >= 1) {
+                    player.inventory.meat -= 1; player.inventory.gold += 3; sfx.playCoin(); 
+                    this.particles.push(new Particle(this.sellShop.x, this.sellShop.y - 40, '#ffd700'));
+                }
+            }
+        }
+
+        // Sell Meat Hold (Y)
+        if (distToSell < 60 && input.isDown('KeyY')) {
+            this.yHoldTimer = (this.yHoldTimer || 0) + dt;
+            if (this.yHoldTimer >= 2.0) {
+                this.yHoldTimer = 0;
+                let sold = false;
+                if (player.inventory.meat > 0) { player.inventory.gold += player.inventory.meat * 3; player.inventory.meat = 0; sold = true; }
+                if (sold) { sfx.playCoin(); for (let i=0; i<15; i++) this.particles.push(new Particle(this.sellShop.x, this.sellShop.y-40, '#ffd700')); }
+            }
+        } else {
+            this.yHoldTimer = 0;
+        }
+
+        // Refuge Shop AI
+        if (Math.abs(this.refugeShop.x - player.x) < 60) this.hiringRefuge = true;
+        else this.hiringRefuge = false;
+
+        if (input.justPressed('Digit1')) { 
+            if (this.hiringBarrack) this._hireFromMenu(player, 'soldier');
+            else if (this.hiringRefuge) {
+                const cost = this.outpost.level >= 2 ? 5 : 2;
+                if (player.inventory.wheat >= cost) { player.inventory.wheat -= cost; this.workers.push(new Worker(this, this.refugeShop.x)); sfx.playHire(); }
+            }
+        }
+        if (input.justPressed('Digit2')) {
+            if (this.hiringBarrack) this._hireFromMenu(player, 'archer');
+            else if (this.hiringRefuge) {
+                if (player.inventory.wood >= 5) {
+                    player.inventory.wood -= 5;
+                    this.huntersHiredCount++;
+                    const side = (this.huntersHiredCount % 2 === 0) ? -1 : 1; // 1st right, 2nd left
+                    const h = new Hunter(this, this.refugeShop.x, side);
+                    this.hunters.push(h); sfx.playHire();
+                }
+            }
+        }
+
         if (input.justPressed('KeyV')) this._buildBarrack(player);
         if (input.justPressed('KeyF')) this._buildFarm(player);
         if (input.justPressed('KeyU')) this._upgradeFarm(player);
         if (input.justPressed('KeyH')) this._healSoldier(player);
         if (input.justPressed('KeyT')) this._upgradeTown(player);
-        // Hire menu selection (1 = soldier, 2 = archer)
-        if (this.hiringBarrack && input.justPressed('Digit1')) this._hireFromMenu(player, 'soldier');
-        if (this.hiringBarrack && input.justPressed('Digit2')) this._hireFromMenu(player, 'archer');
         // Waves
         this.waveTimer -= dt;
         if (this.waveTimer <= 0) { this._spawnWave(); this.waveTimer = this.waveInterval; }
@@ -1939,6 +3255,8 @@ class World {
         this.outpost.update(dt);
         this.barracks.forEach(b => b.update(dt));
         this.barracks = this.barracks.filter(b => !b.dead);
+        this.birds.forEach(b => b.update(dt));
+        this.birds = this.birds.filter(b => !b.dead);
         this.farms.forEach(f => f.update(dt));
         this.farms = this.farms.filter(f => !f.dead);
         this.foregroundTrees.forEach(t => t.update(dt));
@@ -1946,6 +3264,8 @@ class World {
         this.woodBlocks = this.woodBlocks.filter(b => !b.dead);
         this.npcs.forEach(n => n.update(dt));
         this.workers.forEach(w => w.update(dt));
+        this.hunters.forEach(h => h.update(dt));
+        this.hunters = this.hunters.filter(h => !h.dead);
         this.workers = this.workers.filter(w => !w.dead);
         this.soldiers.forEach(s => s.update(dt, player));
         this.soldiers = this.soldiers.filter(s => !s.dead);
@@ -1953,9 +3273,25 @@ class World {
         this.archers = this.archers.filter(a => !a.dead);
         this.arrows.forEach(a => a.update(dt));
         this.arrows = this.arrows.filter(a => !a.dead);
+        this.heroProjectiles.forEach(p => p.update(dt));
+        this.heroProjectiles = this.heroProjectiles.filter(p => !p.dead);
         this.enemies.forEach(e => e.update(dt));
         this.enemies.filter(e => e.dead && !e.coinDropped).forEach(e => e.die(this));
         this.enemies = this.enemies.filter(e => !e.dead);
+        // Animals
+        this.animals.forEach(a => a.update(dt));
+        this.animals = this.animals.filter(a => !a.dead);
+        if (this.animals.length < 6 && Math.random() < 0.002) {
+            const ax = this.outpost.x + (Math.random() > 0.5 ? 1 : -1) * (1500 + Math.random() * 1500);
+            this.animals.push(new Animal(this, ax, Math.random() > 0.5 ? 'deer' : 'rabbit'));
+        }
+
+        // Ladybugs
+        this.ladybugs.forEach(l => l.update(dt));
+        
+        // Dynamic Decorations (Flowers & Grass)
+        this.decorations.forEach(d => d.update(dt));
+ 
         // Clear hiring menu if player walks away
         if (this.hiringBarrack && Math.abs(this.hiringBarrack.x - player.x) > 100) this.hiringBarrack = null;
         this.groundItems.forEach(i => i.update(dt));
@@ -1964,10 +3300,10 @@ class World {
         this.particles = this.particles.filter(p => p.life > 0);
     }
     _buildWoodBlock(p) {
-        if (p.inventory.gold < 30) return;
+        if (p.inventory.wood < 30) return;
         const bx = p.x + (p.facingRight ? 55 : -55);
         this.woodBlocks.push(new WoodBlock(this, bx));
-        p.inventory.gold -= 30; sfx.playBuild();
+        p.inventory.wood -= 30; sfx.playBuild();
     }
     _buildBarrack(p) {
         if (p.inventory.gold < 100) return;
@@ -1985,13 +3321,13 @@ class World {
             const d = Math.abs(f.x - p.x);
             if (d < nearestDist && f.level === 1) { nearest = f; nearestDist = d; }
         }
-        if (nearest && p.inventory.gold >= 150) {
-            p.inventory.gold -= 150; nearest.level = 2; sfx.playRepair();
+        if (nearest && p.inventory.wood >= 50) {
+            p.inventory.wood -= 50; nearest.level = 2; sfx.playRepair();
         }
     }
     _healSoldier(p) {
         if (p.inventory.wheat <= 0) return;
-        const targets = [...this.soldiers, ...this.archers, ...this.workers];
+        const targets = [...this.soldiers, ...this.archers, ...this.workers, ...this.hunters];
         for (const sol of targets) {
             if (sol.dead) continue;
             if (sol.hp >= sol.maxHp) continue;
@@ -2009,8 +3345,8 @@ class World {
     _upgradeTown(p) {
         if (this.outpost.dead || this.outpost.level >= 2) return;
         if (Math.abs(this.outpost.x - p.x) > 130) return;
-        if (p.inventory.gold < 500) return;
-        p.inventory.gold -= 500;
+        if (p.inventory.gold < 100) return;
+        p.inventory.gold -= 100;
         this.outpost.level = 2;
         sfx.playRepair();
         // Fanfare particles
@@ -2023,12 +3359,16 @@ class World {
             if (p.inventory.gold < 30) return;
             p.inventory.gold -= 30;
             const sol = new Soldier(this, b.x + (Math.random() - 0.5) * 40);
-            sol.guardX = b.x; this.soldiers.push(sol); sfx.playHire();
+            sol.guardX = b.x + 600 + Math.random() * 100;
+            sol.spawnWalkTimer = 4.0;
+            this.soldiers.push(sol); sfx.playHire();
         } else if (type === 'archer') {
             if (this.outpost.level < 2 || p.inventory.gold < 50) return;
             p.inventory.gold -= 50;
             const arc = new Archer(this, b.x + (Math.random() - 0.5) * 40);
-            arc.guardX = b.x; this.archers.push(arc); sfx.playHire();
+            arc.guardX = b.x + 600 + Math.random() * 100;
+            arc.spawnWalkTimer = 4.0;
+            this.archers.push(arc); sfx.playHire();
         }
         this.hiringBarrack = null;
     }
@@ -2042,32 +3382,19 @@ class World {
                 this.enemies.push(new Enemy(this, 4000 + Math.random() * 500 + i * 120));
             }
         }
+        /* 
         if (this.waveNumber >= 1) {
             this.enemies.push(new EnemyDragon(this, 4500 + Math.random() * 500));
         }
+        */
     }
-    _handleE(player) {
+    _handleE(player, forceHammer = false) {
         // Repair outpost
         if (this.outpost.dead && Math.abs(this.outpost.x - player.x) < 120 && player.inventory.gold >= 100) {
             player.inventory.gold -= 100; this.outpost.hp = 100; sfx.playRepair(); return;
         }
-        // Open/close barracks hire menu
-        for (const barrack of this.barracks) {
-            if (Math.abs(barrack.x - player.x) < 80) {
-                if (this.outpost.level >= 2) {
-                    // Toggle menu — player presses 1 or 2 to hire
-                    this.hiringBarrack = this.hiringBarrack === barrack ? null : barrack;
-                    sfx.playCoin(); return;
-                } else {
-                    // Old behaviour: directly hire soldier
-                    if (player.inventory.gold >= barrack.hireCost) {
-                        player.inventory.gold -= barrack.hireCost;
-                        const sol = new Soldier(this, barrack.x + (Math.random() - 0.5) * 60);
-                        sol.guardX = barrack.x; this.soldiers.push(sol); sfx.playHire(); return;
-                    }
-                }
-            }
-        }
+        // Barrack interaction (Hire Soldier [1] / Archer [2]) is now handled exclusively in World.update
+        // to prevent accidental gold spend when pressing E near a barrack.
         // Buy weapons
         if (Math.abs(this.axeShop.x - player.x) < 60) {
             if (!player.inventory.hasAxe && player.inventory.gold >= 10) {
@@ -2092,18 +3419,16 @@ class World {
         if (Math.abs(this.sellShop.x - player.x) < 60) {
             if (player.inventory.wood >= 1) { player.inventory.wood -= 1; player.inventory.gold += 2; sfx.playCoin(); return; }
         }
-        // Hire worker at Refuge shop
-        if (Math.abs(this.refugeShop.x - player.x) < 60) {
-            const cost = this.outpost.level >= 2 ? 5 : 2;
-            if (player.inventory.wheat >= cost) {
-                player.inventory.wheat -= cost;
-                this.workers.push(new Worker(this, this.refugeShop.x));
-                sfx.playHire(); return;
-            }
-        }
+        // (Refuge worker hire moved to Digit1 logic above)
         // Attack / chop
+        // Hammer focuses on charging (handled in Character.update); skip immediate swing
+        if (player.weapon === 'hammer' && !forceHammer) return;
+
         const swingTime = player.weapon === 'sword' ? 0.35 : player.weapon === 'fists' ? 0.3 : 0.5;
         player.actionTimer = swingTime;
+        
+        // (Hammer Fireball now handled in Character.update via charging)
+
         let hit = false;
         for (const tree of this.foregroundTrees) {
             if (!tree.dead && Math.abs(tree.x - player.x) < 80) { tree.hit(); hit = true; break; }
@@ -2112,6 +3437,14 @@ class World {
             for (const enemy of this.enemies) {
                 if (Math.abs(enemy.x - player.x) < 80) {
                     enemy.takeDamage(player.weaponDmg);
+                    hit = true; break;
+                }
+            }
+        }
+        if (!hit) {
+            for (const animal of this.animals) {
+                if (!animal.dead && Math.abs(animal.x - player.x) < 80) {
+                    animal.takeDamage(player.weaponDmg);
                     hit = true; break;
                 }
             }
@@ -2247,6 +3580,9 @@ class World {
         const xo = -(cam.x % 40);
         for (let i = 0; i < w / 40 + 2; i++) ctx.fillRect(xo + i * 40, this.groundY, 20, 5);
 
+        // --- Decorations ---
+        this.decorations.forEach(d => d.draw(ctx, cam));
+
         // ═══ ENTITIES ═══
         ctx.beginPath();
         this.foregroundTrees.forEach(t => t.drawStump(ctx, cam));
@@ -2266,11 +3602,16 @@ class World {
         ctx.beginPath();
         this.npcs.forEach(n => n.draw(ctx, cam));
         this.workers.forEach(w => w.draw(ctx, cam));
+        this.hunters.forEach(h => h.draw(ctx, cam));
         this.soldiers.forEach(s => s.draw(ctx, cam));
         this.archers.forEach(a => a.draw(ctx, cam));
+        this.animals.forEach(an => an.draw(ctx, cam));
         this.enemies.forEach(e => e.draw(ctx, cam));
+        this.ladybugs.forEach(l => l.draw(ctx, cam));
+        this.birds.forEach(b => b.draw(ctx, cam));
         ctx.beginPath();
         this.arrows.forEach(a => a.draw(ctx, cam));
+        this.heroProjectiles.forEach(p => p.draw(ctx, cam));
         this.meteors.forEach(m => m.draw(ctx, cam));
         ctx.beginPath();
         this.groundItems.forEach(i => i.draw(ctx, cam));
@@ -2278,9 +3619,9 @@ class World {
         this.particles.forEach(p => p.draw(ctx, cam));
         ctx.beginPath();
 
-        // Hold E/R Progress Bars
-        if (this.eHoldTimer > 0 || this.rHoldTimer > 0) {
-            const timer = this.eHoldTimer > 0 ? this.eHoldTimer : this.rHoldTimer;
+        // Hold E/R/Y Progress Bars
+        if (this.eHoldTimer > 0 || this.rHoldTimer > 0 || this.yHoldTimer > 0) {
+            let timer = 0; if(this.eHoldTimer>0) timer = this.eHoldTimer; else if(this.rHoldTimer>0) timer = this.rHoldTimer; else timer = this.yHoldTimer;
             const sx = this.sellShop.x - cam.x, sy = this.sellShop.y - 145;
             ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(sx, sy, 18, 0, Math.PI * 2); ctx.stroke();
             ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(sx, sy, 18, -Math.PI / 2, -Math.PI / 2 + (timer / 2.0) * Math.PI * 2); ctx.stroke();
@@ -2303,7 +3644,7 @@ class Game {
         this.hasSave = !!localStorage.getItem('kingdom_save');
         // Button hit-areas (set in draw)
         this._btns = {};
-        this.canvas.addEventListener('click', e => this._onClick(e));
+        this.canvas.addEventListener('mousedown', e => this._onClick(e));
         this.resize();
         window.addEventListener('resize', () => this.resize());
         requestAnimationFrame(t => this.loop(t));
@@ -2345,7 +3686,7 @@ class Game {
         this._btns.saveExit = { x: btnX, y: saveY, w: btnW, h: btnH };
         ctx.textAlign = 'left';
     }
-    _toGameOver() { this.state = 'gameover'; this.gameOverTime = 0; }
+
 
     // ── Save / Load ────────────────────────────────────────────────────────────
     _saveGame() {
@@ -2402,7 +3743,8 @@ class Game {
     // ── Input ─────────────────────────────────────────────────────────────────
     _onClick(e) {
         const rect = this.canvas.getBoundingClientRect();
-        const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+        const mx = (e.clientX - rect.left) * (this.canvas.width / rect.width);
+        const my = (e.clientY - rect.top) * (this.canvas.height / rect.height);
         const hit = (btn) => btn && mx >= btn.x && mx <= btn.x + btn.w && my >= btn.y && my <= btn.y + btn.h;
         if (this.state === 'title') {
             if (hit(this._btns.newGame)) {
@@ -2514,33 +3856,54 @@ class Game {
         // Title text with glow
         const titleY = H * 0.28 + Math.sin(t * 0.8) * 6;
         ctx.shadowColor = '#c8a000'; ctx.shadowBlur = 30;
-        ctx.fillStyle = '#ffd700'; ctx.font = `bold ${Math.round(W * 0.085)}px serif`;
-        ctx.textAlign = 'center'; ctx.fillText('KINGDOM', W / 2, titleY);
+        ctx.textAlign = 'center'; 
+        
+        // "Pocket" (Smaller - Ruby Red)
+        ctx.fillStyle = '#e0115f'; ctx.font = `italic ${Math.round(W * 0.045)}px serif`;
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText('POCKET', W / 2, titleY - 25);
+
+        // "Kingdom" (Medium-Large - Golden)
+        ctx.fillStyle = '#ffd700'; ctx.font = `bold ${Math.round(W * 0.08)}px serif`;
+        ctx.textBaseline = 'top'; 
+        ctx.fillText('KINGDOM', W / 2, titleY + 5);
+        
         ctx.shadowBlur = 0;
-        ctx.fillStyle = '#c8c8c8'; ctx.font = `${Math.round(W * 0.025)}px sans-serif`;
-        ctx.fillText('A Kingdom Demake', W / 2, titleY + 48);
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillStyle = '#c8c8c8'; ctx.font = `${Math.round(W * 0.022)}px sans-serif`;
+        ctx.fillText('Build small, Dream big.', W / 2, titleY + 160);
         ctx.textAlign = 'left';
         // Buttons
         const btnW = 240, btnH = 52, btnX = W / 2 - btnW / 2;
-        const newY = H * 0.56;
+        const topY = H * 0.56;
+        const botY = topY + 70;
+        
+        let newGameY, continueY;
+        if (this.hasSave) {
+            continueY = topY;
+            newGameY = botY;
+        } else {
+            newGameY = topY;
+            continueY = botY;
+        }
+
         // New Game button
-        const ngHover = false;
         ctx.fillStyle = 'rgba(200,160,0,0.9)';
-        ctx.beginPath(); ctx.roundRect(btnX, newY, btnW, btnH, 8); ctx.fill();
+        ctx.beginPath(); ctx.roundRect(btnX, newGameY, btnW, btnH, 8); ctx.fill();
         ctx.fillStyle = '#1a0d00'; ctx.font = 'bold 22px sans-serif'; ctx.textAlign = 'center';
-        ctx.fillText('⚔  New Game', W / 2, newY + 34);
-        this._btns.newGame = { x: btnX, y: newY, w: btnW, h: btnH };
+        ctx.fillText('⚔  New Game', W / 2, newGameY + 34);
+        this._btns.newGame = { x: btnX, y: newGameY, w: btnW, h: btnH };
+
         // Continue button
-        const contY = newY + 70;
         ctx.fillStyle = this.hasSave ? 'rgba(40,100,60,0.9)' : 'rgba(50,50,50,0.5)';
-        ctx.beginPath(); ctx.roundRect(btnX, contY, btnW, btnH, 8); ctx.fill();
+        ctx.beginPath(); ctx.roundRect(btnX, continueY, btnW, btnH, 8); ctx.fill();
         ctx.fillStyle = this.hasSave ? '#8fffb0' : '#666'; ctx.font = 'bold 22px sans-serif';
-        ctx.fillText(this.hasSave ? '💾  Continue' : '💾  No Save', W / 2, contY + 34);
-        this._btns.continue = { x: btnX, y: contY, w: btnW, h: btnH };
+        ctx.fillText(this.hasSave ? '💾  Continue' : '💾  No Save', W / 2, continueY + 34);
+        this._btns.continue = { x: btnX, y: continueY, w: btnW, h: btnH };
         ctx.textAlign = 'left';
         // Subtitle hints
         ctx.fillStyle = 'rgba(150,150,180,0.7)'; ctx.font = '13px sans-serif'; ctx.textAlign = 'center';
-        ctx.fillText('Build · Defend · Survive', W / 2, contY + btnH + 30);
+        ctx.fillText('Build · Defend · Survive', W / 2, botY + btnH + 30);
         ctx.textAlign = 'left';
     }
 
@@ -2592,9 +3955,9 @@ class Game {
 
         // ── Stat Panel (top-left) ──
         ctx.fillStyle = 'rgba(0,0,0,0.75)';
-        ctx.fillRect(8, 8, 260, 110);
+        ctx.fillRect(8, 8, 270, 158);
 
-        // HP bar
+        // HP bar  (row 1)
         ctx.fillStyle = '#aaa'; ctx.font = 'bold 13px sans-serif';
         ctx.fillText('HP', pad, 30);
         ctx.fillStyle = '#400'; ctx.fillRect(40, 17, 170, 14);
@@ -2603,32 +3966,64 @@ class Game {
         ctx.fillStyle = '#fff'; ctx.font = '11px sans-serif';
         ctx.fillText(`${Math.ceil(p.hp)}/${p.maxHp}`, 44, 28);
 
-        // Stamina bar
+        // Stamina bar  (row 2)
         ctx.fillStyle = '#aaa'; ctx.font = 'bold 13px sans-serif';
         ctx.fillText('SP', pad, 52);
         ctx.fillStyle = '#330'; ctx.fillRect(40, 39, 170, 14);
         ctx.fillStyle = '#f5e642';
         ctx.fillRect(40, 39, (p.stamina / p.maxStamina) * 170, 14);
 
-        // Gold / Wood / Wheat
-        ctx.fillStyle = '#ffd700'; ctx.font = 'bold 14px sans-serif';
-        ctx.fillText(`⬡ ${p.inventory.gold}`, pad, 74);
+        // Resources  (row 3)
+        // Mini gold coin (matches in-game coin style)
+        ctx.fillStyle = '#ffd700';
+        ctx.beginPath(); ctx.arc(pad + 7, 65, 7, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#c8a000';
+        ctx.beginPath(); ctx.arc(pad + 7, 65, 5, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#ffd700'; ctx.font = 'bold 7px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText('G', pad + 7, 68); ctx.textAlign = 'left';
+        ctx.fillStyle = '#ffd700'; ctx.font = 'bold 13px sans-serif';
+        ctx.fillText(`${p.inventory.gold}`, pad + 18, 72);
         ctx.fillStyle = '#8b4513';
-        ctx.fillText(`🪵 ${p.inventory.wood}`, 75, 74);
+        ctx.fillText(`🪵 ${p.inventory.wood}`, 75, 72);
         ctx.fillStyle = '#f5c842';
-        ctx.fillText(`🌾 ${p.inventory.wheat}`, 135, 74);
+        ctx.fillText(`🌾 ${p.inventory.wheat}`, 135, 72);
+        ctx.fillStyle = '#c8102e';
+        ctx.fillText(`🍖 ${p.inventory.meat || 0}`, 195, 72);
 
-        // Equipped weapon + Wave timer
+        // Weapon + Wave  (row 4)
         const weaponName = p.weapon === 'hammer' ? 'Hammer' : p.weapon === 'sword' ? 'Sword' : p.weapon === 'axe' ? 'Axe' : 'Fists';
         const weaponColor = p.weapon === 'hammer' ? '#ffaa00' : p.weapon === 'sword' ? '#88ccff' : p.weapon === 'axe' ? '#adf' : '#ccc';
         ctx.fillStyle = weaponColor; ctx.font = '12px sans-serif';
-        ctx.fillText(`⚔ ${weaponName} (${p.weaponDmg}dmg)`, pad, 95);
-
+        ctx.fillText(`⚔ ${weaponName} (${p.weaponDmg}dmg)`, pad, 90);
         const wt = Math.ceil(Math.max(0, this.world.waveTimer));
-        ctx.fillText(`Wave ${this.world.waveNumber + 1} in ${wt}s`, pad, 110);
         ctx.fillStyle = '#ccc';
+        ctx.fillText(`Wave ${this.world.waveNumber + 1} in ${wt}s`, 155, 90);
+
+        // Combat units  (row 5)
         const u = this.world.soldiers.length, a = this.world.archers.length;
-        ctx.fillText(`Units: ${u + a} (Sol:${u} Arc:${a})`, 140, 110);
+        ctx.fillStyle = '#ddd'; ctx.font = '12px sans-serif';
+        ctx.fillText(`🗡 ${u} Soldiers   🏹 ${a} Archers`, pad, 108);
+
+        // Workers & Hunters  (row 6)
+        const wk = this.world.workers.length, hu = this.world.hunters.length;
+        ctx.fillStyle = '#aaffcc'; ctx.font = '12px sans-serif';
+        ctx.fillText(`🪓 Workers: ${wk}`, pad, 144);
+
+        // Hand-drawn throwing spear icon for hunters
+        const sx2 = pad + 135, sy2 = 137;
+        ctx.save();
+        ctx.translate(sx2, sy2);
+        ctx.rotate(-Math.PI / 4); // diagonal angle
+        // Shaft (wood)
+        ctx.strokeStyle = '#c8a060'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(-8, 0); ctx.lineTo(7, 0); ctx.stroke();
+        // Tip (metal)
+        ctx.fillStyle = '#d0d8e8';
+        ctx.beginPath(); ctx.moveTo(7, 0); ctx.lineTo(14, -2.5); ctx.lineTo(7, 5); ctx.closePath(); ctx.fill();
+        ctx.restore();
+
+        ctx.fillStyle = '#aaffcc'; ctx.font = '12px sans-serif';
+        ctx.fillText(`Hunters: ${hu}`, pad + 148, 144);
 
         // Wave warning
         if (this.world.waveTimer < 15 && this.world.waveTimer > 0) {
@@ -2637,6 +4032,10 @@ class Game {
             ctx.fillText(`⚠ Enemy wave approaching! ⚠`, this.canvas.width / 2, 40);
             ctx.textAlign = 'left';
         }
+
+        ctx.fillStyle = '#ccc'; ctx.font = 'bold 13px monospace'; ctx.textAlign = 'right';
+        ctx.fillText(`Pos: ${Math.round(p.x)}, ${Math.round(p.y)}`, this.canvas.width - 20, 30);
+        ctx.textAlign = 'left';
 
         // ── Controls bar (bottom) ──
         ctx.fillStyle = 'rgba(0,0,0,0.6)';
@@ -2649,4 +4048,4 @@ class Game {
     }
 }
 
-window.addEventListener('load', () => { new Game('gameCanvas'); });
+window.addEventListener('load', () => { if (document.getElementById('gameCanvas') && document.getElementById('gameCanvas').style.display !== 'none') new Game('gameCanvas'); });

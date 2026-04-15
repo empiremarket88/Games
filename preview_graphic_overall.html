@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kingdom - Exact Graphics Preview</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #050508;
+            --card-bg: #0c0c14;
+            --accent: #00f5ff;
+            --text: #e0e0e0;
+            --sub-text: #777788;
+            --border: #1a1a2a;
+            --gold: #ffd700;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; padding: 20px;
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: 'Outfit', sans-serif;
+        }
+        header { max-width: 1400px; margin: 0 auto 40px; text-align: center; border-bottom: 1px solid var(--border); padding-bottom: 20px; }
+        h1 { font-size: 2.5rem; margin: 0; color: var(--gold); }
+        .container { max-width: 1400px; margin: 0 auto; }
+        section { margin-bottom: 50px; }
+        .section-title { font-size: 1.5rem; margin-bottom: 20px; color: var(--accent); border-left: 4px solid var(--accent); padding-left: 15px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
+        .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 15px; display: flex; flex-direction: column; align-items: center; }
+        canvas { background: #000; border-radius: 4px; margin-bottom: 10px; image-rendering: pixelated; width: 100%; height: auto; outline: 1px solid #222; }
+        .info { width: 100%; font-size: 0.9rem; margin-bottom: 10px; }
+        .ctrls { display: flex; flex-wrap: wrap; gap: 5px; width: 100%; margin-top: auto; }
+        label { font-size: 0.75rem; color: var(--sub-text); width: 100%; margin: 5px 0; }
+        input[type="range"] { width: 100%; margin-bottom: 10px; }
+        button { background: #1a1a2a; border: 1px solid #334; color: #ccc; padding: 5px 10px; border-radius: 3px; cursor: pointer; font-size: 0.75rem; }
+        button:hover { background: #2a2a3a; color: #fff; }
+        button.active { background: var(--accent); color: #000; font-weight: bold; border-color: var(--accent); }
+        .wide { grid-column: span 2; }
+        @media (max-width: 800px) { .wide { grid-column: span 1; } }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>PARITY PREVIEW</h1>
+    <p>1:1 Graphics from app.js Game Logic</p>
+</header>
+
+<div class="container">
+    <section>
+        <div class="section-title">The Hero (Player)</div>
+        <div class="grid">
+            <div class="card">
+                <canvas id="c-player" width="200" height="200"></canvas>
+                <div class="info"><strong>Character</strong></div>
+                <div class="ctrls">
+                    <button onclick="p_setWeapon('none')">Fists</button>
+                    <button onclick="p_setWeapon('axe')">Axe</button>
+                    <button onclick="p_setWeapon('sword')">Sword</button>
+                    <button onclick="p_setWeapon('hammer')">Hammer</button>
+                </div>
+                <div class="ctrls" style="margin-top:10px;">
+                    <button onclick="p_setAnim('idle')">Idle</button>
+                    <button onclick="p_setAnim('walk')">Walk</button>
+                    <button onclick="p_setAnim('run')">Run</button>
+                    <button onclick="p_attack()">Attack</button>
+                </div>
+            </div>
+            <div class="card">
+                <canvas id="c-proj" width="200" height="200"></canvas>
+                <div class="info"><strong>Projectiles</strong></div>
+                <div class="ctrls">
+                    <div style="font-size:0.7rem; color:var(--sub-text);">Arrow, Fireball, LaserBeam, Meteor</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <div class="section-title">Townsfolk & Units</div>
+        <div class="grid">
+            <div class="card"><canvas id="c-npc" width="200" height="200"></canvas><div class="info"><strong>NPC</strong></div></div>
+            <div class="card">
+                <canvas id="c-worker" width="200" height="200"></canvas>
+                <div class="info"><strong>Worker</strong></div>
+                <div class="ctrls">
+                    <button onclick="w_set('idle')">Idle</button>
+                    <button onclick="w_set('walk')">Walk</button>
+                    <button onclick="w_set('carry')">Carry Log</button>
+                </div>
+            </div>
+            <div class="card">
+                <canvas id="c-hunter" width="200" height="200"></canvas>
+                <div class="info"><strong>Hunter</strong></div>
+                <div class="ctrls">
+                    <button onclick="h_setMeat(0)">0 Meat</button>
+                    <button onclick="h_setMeat(1)">1 Meat</button>
+                    <button onclick="h_attack()">Throw Pike</button>
+                </div>
+            </div>
+            <div class="card">
+                <canvas id="c-soldier" width="200" height="200"></canvas>
+                <div class="info"><strong>Soldier</strong></div>
+                <div class="ctrls"><button onclick="s_attack()">Swing Sword</button></div>
+            </div>
+            <div class="card">
+                <canvas id="c-archer" width="200" height="200"></canvas>
+                <div class="info"><strong>Archer</strong></div>
+                <div class="ctrls"><button onclick="arc_drawBow()">Toggle Bow</button></div>
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <div class="section-title">Enemies & Bosses</div>
+        <div class="grid">
+            <div class="card">
+                <canvas id="c-enemy" width="200" height="200"></canvas>
+                <div class="info">Enemy Scavenger</div>
+                <button onclick="e_attack()">Hit Flash</button>
+            </div>
+            <div class="card">
+                <canvas id="c-enemy-archer" width="200" height="200"></canvas>
+                <div class="info">Enemy Archer</div>
+                <button onclick="ea_attack()">Draw Bow</button>
+            </div>
+            <div class="card wide">
+                <canvas id="c-dragon" width="600" height="360"></canvas>
+                <div class="info">Emerald Mecha Dragon</div>
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <div class="section-title">Architecture & Environment</div>
+        <div class="grid">
+            <div class="card">
+                <canvas id="c-outpost" width="300" height="260"></canvas>
+                <div class="info"><strong>Outpost</strong></div>
+                <div class="ctrls">
+                    <button onclick="o_setLvl(1)">Level 1</button>
+                    <button onclick="o_setLvl(2)">Level 2 (Town)</button>
+                </div>
+            </div>
+            <div class="card">
+                <canvas id="c-farm" width="300" height="260"></canvas>
+                <div class="info"><strong>Farm</strong></div>
+                <div class="ctrls">
+                    <button onclick="f_setLvl(1)">Level 1</button>
+                    <button onclick="f_setLvl(2)">Level 2</button>
+                    <label>Growth Step:</label>
+                    <input type="range" min="0" max="100" value="50" oninput="f_timer = this.value">
+                </div>
+            </div>
+            <div class="card">
+                <canvas id="c-barracks" width="300" height="260"></canvas>
+                <div class="info"><strong>Barracks</strong></div>
+            </div>
+            <div class="card">
+                <canvas id="c-shops" width="300" height="260"></canvas>
+                <div class="info"><strong>Shops</strong></div>
+                <div class="ctrls">
+                    <button onclick="shop_set('axe')">Axe</button>
+                    <button onclick="shop_set('hammer')">Hammer</button>
+                    <button onclick="shop_set('refuge')">Refuge</button>
+                    <button onclick="shop_set('sell')">Sell</button>
+                </div>
+            </div>
+            <div class="card">
+                <canvas id="c-animal" width="300" height="260"></canvas>
+                <div class="info"><strong>Fauna (Rabbit & Deer)</strong></div>
+            </div>
+            <div class="card">
+                <canvas id="c-flora" width="300" height="260"></canvas>
+                <div class="info"><strong>Flora & Objects (Tree & WoodBlock)</strong></div>
+                <div class="ctrls">
+                    <button onclick="tree_obj.hit()">Chop Tree (Trigger Leaves/Bird)</button>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+
+<!-- Dummy canvas for app.js game loop if it executes -->
+<canvas id="gameCanvas" width="10" height="10" style="display:none;"></canvas>
+
+<!-- Load the EXACT game logic -->
+<script src="app.js"></script>
+
+<script>
+    // Build a mock world to support the constructors that need 'world' dependencies
+    const cam = { x: 0 };
+    
+    class MockGame {
+        constructor() {
+            this.canvas = { width: 1400, height: 800 };
+            this.player = { x: -99999, y: 120, inventory: { wheat: 0 } };
+        }
+    }
+    
+    class MockWorld {
+        constructor() {
+             this.groundY = 150;
+             this.game = new MockGame();
+             this.outpost = { x: -99999, level: 1, hp: 1000 };
+             this.enemies = []; this.particles = []; this.animals = [];
+             this.groundItems = []; this.arrows = [];
+             this.farms = []; this.barracks = []; this.soldiers = [];
+             this.archers = []; this.workers = []; this.hunters = [];
+             this.woodBlocks = [];
+             this.lastTime = Date.now();
+        }
+    }
+    
+    const world = new MockWorld();
+
+    const p_obj = new Character(world); p_obj.x = 100; p_obj.y = world.groundY;
+    const npc_obj = new NPC(world, 100); npc_obj.y = world.groundY;
+    const w_obj = new Worker(world, 100); w_obj.y = world.groundY;
+    const h_obj = new Hunter(world, 100); h_obj.y = world.groundY;
+    const s_obj = new Soldier(world, 100); s_obj.y = world.groundY;
+    const arc_obj = new Archer(world, 100); arc_obj.y = world.groundY;
+    
+    const o_obj = new Outpost(world, 150); o_obj.y = world.groundY;
+    const f_obj = new Farm(world, 150); f_obj.y = world.groundY;
+    const bar_obj = new Barrack(world, 150); bar_obj.y = world.groundY;
+    const shop_obj = new Shop(world, 150, 'axe'); shop_obj.y = world.groundY;
+
+    const e_obj = new Enemy(world, 100); e_obj.y = world.groundY;
+    const ea_obj = new EnemyArcher(world, 100); ea_obj.y = world.groundY;
+    const d_obj = new EnemyDragon(world, 300); d_obj.y = world.groundY + 80;
+
+    const rabbit_obj = new Animal(world, 100, 'rabbit'); rabbit_obj.y = world.groundY;
+    const deer_obj = new Animal(world, 140, 'deer'); deer_obj.y = world.groundY;
+    
+    const tree_obj = new ForegroundTree(world, 100); tree_obj.y = world.groundY;
+    const bird_on_tree = new Bird(world, tree_obj); 
+    tree_obj.perchedBirds.push(bird_on_tree);
+    tree_obj.perchedBirds.push(new Bird(world, tree_obj)); // Preview multiple birds
+    const woodblock_obj = new WoodBlock(world, 150); woodblock_obj.y = world.groundY - 40;
+    
+    // Ladybug preview
+    const mock_deco = new Decoration(world, 200, 'flower');
+    const ladybug_obj = new Ladybug(world, mock_deco);
+    
+    // Projectiles
+    const arrow_obj = new Arrow(world, 40, 100, 150, 100); arrow_obj.update = function(dt){ this.x += 100*dt; if (this.x>160) this.x=40; };
+    const fireball_obj = new Fireball(world, 50, 130, 150, 130); fireball_obj.update = function(dt){ this.x += 50*dt; if (this.x>160) this.x=50; };
+    const laser_obj = new LaserBeam(world, 20, 80, 180, 80); laser_obj.update = function(dt){ this.age += dt; if(this.age>0.6) this.age=0; };
+    const meteor_obj = new Meteor(world, false); meteor_obj.x=80; meteor_obj.y=80; meteor_obj.trail=[]; meteor_obj.update = function(dt){ this.trail.unshift({x:this.x,y:this.y}); if(this.trail.length>18)this.trail.pop(); this.x += 40*dt; this.y += 40*dt; if(this.y>120){this.x=50;this.y=50;} };
+
+    function p_setWeapon(w) { p_obj.inventory.hasAxe = (w==='axe'); p_obj.inventory.hasSword = (w==='sword'); p_obj.inventory.hasHammer = (w==='hammer'); }
+    function p_setAnim(a) { p_obj.state = a; }
+    function p_attack() { p_obj.state = 'action'; p_obj.actionTimer = 0.5; }
+    function w_set(s) { w_obj.state = s; w_obj.carryingLogs = (s==='carry'?3:0); }
+    function h_setMeat(n) { h_obj.meatCount = n; }
+    function h_attack() { h_obj.pikeHideTimer = 0.5; }
+    function s_attack() { s_obj.attackTimer = 0.6; }
+    function arc_drawBow() { arc_obj.drawingBow = !arc_obj.drawingBow; arc_obj.drawTimer = arc_obj.drawingBow?0.7:0; }
+    function e_attack() { e_obj.takeDamage(10); e_obj.hp = 60; }
+    function ea_attack() { ea_obj.drawingBow = true; ea_obj.drawTimer = 0; }
+    function o_setLvl(l) { o_obj.level = l; }
+    function shop_set(t) { shop_obj.type = t; }
+    let f_timer = 50;
+
+    function renderUnit(id, obj, ctxCallback) {
+        const c = document.getElementById(id); if(!c) return; 
+        const ctx = c.getContext('2d');
+        ctx.clearRect(0,0,c.width,c.height);
+        
+        ctx.fillStyle = '#1e1104'; 
+        ctx.fillRect(0, world.groundY, c.width, c.height - world.groundY);
+
+        if (ctxCallback) ctxCallback(ctx, cam);
+        else obj.draw(ctx, cam, p_obj);
+    }
+
+    let pt = Date.now();
+    function loop() {
+        const now = Date.now();
+        const dt = Math.min((now - pt)/1000, 0.05);
+        pt = now;
+        
+        if (p_obj.state === 'walk') p_obj.time += dt; else if(p_obj.state === 'run') p_obj.time += dt*2;
+        if (p_obj.actionTimer > 0) { p_obj.actionTimer -= dt; p_obj.state='action'; }
+        if (p_obj.hurtTimer > 0) p_obj.hurtTimer -= dt;
+        
+        npc_obj.time += dt;
+        w_obj.time += dt;
+        h_obj.time += dt; if(h_obj.pikeHideTimer > 0) h_obj.pikeHideTimer-=dt;
+        s_obj.time += dt;
+        arc_obj.time += dt; if(arc_obj.drawingBow) arc_obj.drawTimer += dt;
+        
+        e_obj.time += dt; if(e_obj.hurtTimer > 0) e_obj.hurtTimer-=dt;
+        ea_obj.time += dt; if(ea_obj.drawingBow) ea_obj.drawTimer += dt;
+        d_obj.update(dt);
+        ladybug_obj.update(dt);
+        
+        o_obj.time += dt;
+        f_obj.time += dt; f_obj.timer = f_timer * (f_obj.level === 1 ? 0.5 : 0.25);
+        bar_obj.time += dt;
+        shop_obj.time += dt;
+        tree_obj.update(dt);
+        
+        rabbit_obj.time += dt; rabbit_obj.state='walk'; 
+        deer_obj.time += dt; deer_obj.state='walk';
+        
+        arrow_obj.update(dt);
+        fireball_obj.update(dt);
+        laser_obj.update(dt);
+        meteor_obj.update(dt);
+
+        renderUnit('c-player', p_obj);
+        renderUnit('c-npc', npc_obj);
+        renderUnit('c-worker', w_obj);
+        renderUnit('c-hunter', h_obj);
+        renderUnit('c-soldier', s_obj);
+        renderUnit('c-archer', arc_obj);
+        renderUnit('c-enemy', e_obj);
+        renderUnit('c-enemy-archer', ea_obj);
+        renderUnit('c-dragon', d_obj);
+        
+        renderUnit('c-animal', null, (ctx)=> {
+            rabbit_obj.draw(ctx, cam);
+            deer_obj.draw(ctx, cam);
+        });
+        renderUnit('c-flora', null, (ctx)=> {
+            tree_obj.draw(ctx, cam);
+            tree_obj.perchedBirds.forEach(b => b.draw(ctx, cam));
+            mock_deco.draw(ctx, cam);
+            ladybug_obj.draw(ctx, cam);
+            woodblock_obj.draw(ctx, cam);
+        });
+        
+        renderUnit('c-proj', null, (ctx)=> {
+            arrow_obj.draw(ctx, cam);
+            fireball_obj.draw(ctx, cam);
+            laser_obj.draw(ctx, cam);
+            meteor_obj.draw(ctx, cam);
+        });
+
+        renderUnit('c-outpost', o_obj);
+        renderUnit('c-farm', f_obj);
+        renderUnit('c-barracks', bar_obj);
+        renderUnit('c-shops', shop_obj);
+
+        requestAnimationFrame(loop);
+    }
+    loop();
+</script>
+</body>
+</html>
