@@ -117,12 +117,13 @@ body, html {
 .d-pad { display: flex; gap: 20px; }
 
 /* Grids */
-.button-grid, .build-grid {
+.numbers-grid, .button-grid, .build-grid {
     display: grid;
     gap: 10px;
 }
 
-.button-grid { grid-template-columns: repeat(3, 1fr); margin-bottom: 5px; }
+.numbers-grid { grid-template-columns: repeat(3, 1fr); margin-bottom: 10px; }
+.button-grid { grid-template-columns: repeat(3, 1fr); margin-bottom: 10px; }
 .build-grid { grid-template-columns: repeat(3, 1fr); }
 
 .action {

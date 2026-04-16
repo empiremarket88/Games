@@ -147,4 +147,17 @@ Handled the challenge of responsive resizing in a ground-based coordinate system
 ## 🛠 Project Roadmap & Versioning
 - **v1.8**: Inferno Upgrade (Flame Hammer, Dialogue Polish).
 - **v1.9**: Fauna & Frontiers (Hunter Unit, Meat Economy, Enemy Base Camp).
-- **v2.0**: Mobility Update (Full Mobile Support, Touch Controls, Fullscreen API).
+- **v2.1**: Control Unification (Contextual 1, 2, 3 Mapping, Streamlined Mobile UI).
+
+---
+
+## 🏗 Key Patterns & Architecture
+
+### 1. Contextual Unified Controls (v2.1)
+Streamlined the game’s interaction model by consolidating context-sensitive actions into the primary number keys (`1`, `2`, `3`).
+- **Mapping Strategy**:
+    - **Resource Shop**: `1` (Wood), `2` (Wheat), `3` (Meat). Tap for 1 unit, Hold(2s) for all units.
+    - **Upgrade Zones**: `1` triggers Farm or Town updates.
+    - **Recruitment**: `1` (Soldier/Worker), `2` (Archer/Hunter).
+- **Simplified Mobile Layout**: Removed explicit "Upgrade" and "Town" buttons in favor of the contextual `1, 2, 3` grid.
+- **Design Intent**: reduces button bloat on mobile and keyboard travel on desktop, making the economy loop faster and more intuitive.

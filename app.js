@@ -535,7 +535,7 @@ class Farm {
         if (Math.abs(this.x - player.x) < 70) {
             ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(sx - 80, sy - 85, 160, 20);
             ctx.fillStyle = '#fff'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
-            if (this.level === 1) ctx.fillText('Upgrade Farm 50 Wood [U]', sx, sy - 71);
+            if (this.level === 1) ctx.fillText('Upgrade Farm 50 Wood [1]', sx, sy - 71);
             else ctx.fillText('Max level!', sx, sy - 71);
             ctx.textAlign = 'left';
         }
@@ -1588,8 +1588,8 @@ class Shop {
                 ctx.fillText('Sell Wheat 3G each', sx, this.y - 114);
                 ctx.fillText('Sell Meat 3G each', sx, this.y - 100);
                 ctx.fillStyle = '#f5c842'; ctx.font = 'bold 10px sans-serif';
-                ctx.fillText('Tap: E(Wood) | R(Wheat) | Y(Meat)', sx, this.y - 84);
-                ctx.fillText('Hold: E(Wd) | R(Wh) | Y(Mt) (SELL ALL)', sx, this.y - 68);
+                ctx.fillText('Tap: 1(Wood) | 2(Wheat) | 3(Meat)', sx, this.y - 84);
+                ctx.fillText('Hold: 1(Wd) | 2(Wh) | 3(Mt) (SELL ALL)', sx, this.y - 68);
                 ctx.textAlign = 'left';
             }
         }
@@ -2788,7 +2788,7 @@ class Outpost {
             if (Math.abs(this.x - player.x) < 120) {
                 ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(sx - 110, sy - 185, 220, 22);
                 ctx.fillStyle = '#ffd700'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
-                ctx.fillText('Upgrade to Town 100G [T]', sx, sy - 169); ctx.textAlign = 'left';
+                ctx.fillText('Upgrade to Town 100G [1]', sx, sy - 169); ctx.textAlign = 'left';
             }
         }
         // HP bar
@@ -3276,6 +3276,7 @@ class World {
         this.meteorShowerTimer = 0;
         this.meteorShowerBigPending = false;
         this.huntersHiredCount = 0;
+        this.digit1Hold = 0; this.digit2Hold = 0; this.digit3Hold = 0;
     }
     update(dt, input) {
         this.time += dt;
@@ -3292,46 +3293,108 @@ class World {
         // Keybinds
         if (input.justPressed('KeyB')) this._buildWoodBlock(player);
         if (input.justPressed('KeyE')) this._handleE(player);
+        if (input.justPressed('KeyH')) this._healSoldier(player);
+        if (input.justPressed('KeyV')) this._buildBarrack(player);
+        if (input.justPressed('KeyF')) this._buildFarm(player);
 
-        // Hold E to Sell All logic
+        // --- Contextual 1, 2, 3 System ---
         const distToSell = Math.abs(this.sellShop.x - player.x);
-        if (distToSell < 60 && input.isDown('KeyE')) {
-            this.eHoldTimer += dt;
-            if (this.eHoldTimer >= 2.0) {
-                this.eHoldTimer = 0;
-                let sold = false;
+        const nearShop = distToSell < 60;
+        const nearOutpost = Math.abs(this.outpost.x - player.x) < 130;
+        
+        // Find nearest farm for upgrade context
+        let nearestF = null;
+        for (const f of this.farms) {
+            if (Math.abs(f.x - player.x) < 120 && f.level === 1) nearestF = f;
+        }
+
+        // 1. Digital 1: Wood Sell (Tap/Hold), Town Upgrade, Farm Upgrade, Hire 1
+        if (input.isDown('Digit1')) {
+            this.digit1Hold += dt;
+            if (this.digit1Hold >= 2.0 && nearShop) {
+                this.digit1Hold = -999; // Prevent multiple triggers
                 if (player.inventory.wood > 0) {
                     player.inventory.gold += player.inventory.wood * 2;
-                    player.inventory.wood = 0; sold = true;
-                }
-                if (sold) {
-                    sfx.playCoin();
+                    player.inventory.wood = 0; sfx.playCoin();
                     for (let i = 0; i < 15; i++) this.particles.push(new Particle(this.sellShop.x, this.sellShop.y - 40, '#ffd700'));
                 }
             }
         } else {
-            this.eHoldTimer = 0;
+            if (this.digit1Hold > 0 && this.digit1Hold < 2.0) {
+                // Was a tap
+                if (nearShop) {
+                    if (player.inventory.wood >= 1) {
+                        player.inventory.wood -= 1; player.inventory.gold += 2; sfx.playCoin();
+                        this.particles.push(new Particle(this.sellShop.x, this.sellShop.y - 40, '#ffd700'));
+                    }
+                } else if (nearOutpost) {
+                    this._upgradeTown(player);
+                } else if (nearestF) {
+                    this._upgradeFarm(player);
+                } else if (this.hiringBarrack) {
+                    this._hireFromMenu(player, 'soldier');
+                } else if (this.hiringRefuge) {
+                    const cost = this.outpost.level >= 2 ? 5 : 2;
+                    if (player.inventory.wheat >= cost) { player.inventory.wheat -= cost; this.workers.push(new Worker(this, this.refugeShop.x)); sfx.playHire(); }
+                }
+            }
+            this.digit1Hold = 0;
         }
 
-        if (distToSell < 60 && input.isDown('KeyR')) {
-            this.rHoldTimer = (this.rHoldTimer || 0) + dt;
-            if (this.rHoldTimer >= 2.0) {
-                this.rHoldTimer = 0;
-                let sold = false;
+        // 2. Digital 2: Wheat Sell (Tap/Hold), Hire 2
+        if (input.isDown('Digit2')) {
+            this.digit2Hold += dt;
+            if (this.digit2Hold >= 2.0 && nearShop) {
+                this.digit2Hold = -999;
                 if (player.inventory.wheat > 0) {
                     player.inventory.gold += player.inventory.wheat * 3;
-                    player.inventory.wheat = 0; sold = true;
-                }
-                if (sold) {
-                    sfx.playCoin();
+                    player.inventory.wheat = 0; sfx.playCoin();
                     for (let i = 0; i < 15; i++) this.particles.push(new Particle(this.sellShop.x, this.sellShop.y - 40, '#ffd700'));
                 }
             }
         } else {
-            this.rHoldTimer = 0;
+            if (this.digit2Hold > 0 && this.digit2Hold < 2.0) {
+                if (nearShop) {
+                    if (player.inventory.wheat >= 1) {
+                        player.inventory.wheat -= 1; player.inventory.gold += 3; sfx.playCoin();
+                        this.particles.push(new Particle(this.sellShop.x, this.sellShop.y - 40, '#ffd700'));
+                    }
+                } else if (this.hiringBarrack) {
+                    this._hireFromMenu(player, 'archer');
+                } else if (this.hiringRefuge) {
+                    if (player.inventory.wood >= 5) {
+                        player.inventory.wood -= 5;
+                        this.huntersHiredCount++;
+                        const side = (this.huntersHiredCount % 2 === 0) ? -1 : 1;
+                        this.hunters.push(new Hunter(this, this.refugeShop.x, side)); sfx.playHire();
+                    }
+                }
+            }
+            this.digit2Hold = 0;
         }
 
-        // Auto-detect nearest barrack for quick hiring (no 'E' required)
+        // 3. Digital 3: Meat Sell (Tap/Hold)
+        if (input.isDown('Digit3')) {
+            this.digit3Hold += dt;
+            if (this.digit3Hold >= 2.0 && nearShop) {
+                this.digit3Hold = -999;
+                if (player.inventory.meat > 0) {
+                    player.inventory.gold += player.inventory.meat * 3;
+                    player.inventory.meat = 0; sfx.playCoin();
+                    for (let i = 0; i < 15; i++) this.particles.push(new Particle(this.sellShop.x, this.sellShop.y - 40, '#ffd700'));
+                }
+            }
+        } else {
+            if (this.digit3Hold > 0 && this.digit3Hold < 2.0) {
+                if (nearShop && player.inventory.meat >= 1) {
+                    player.inventory.meat -= 1; player.inventory.gold += 3; sfx.playCoin();
+                    this.particles.push(new Particle(this.sellShop.x, this.sellShop.y - 40, '#ffd700'));
+                }
+            }
+            this.digit3Hold = 0;
+        }
+
+        // Auto-detect nearest barrack for quick hiring
         let nearestB = null;
         let minDistB = 80;
         for (const b of this.barracks) {
@@ -3340,72 +3403,7 @@ class World {
         }
         this.hiringBarrack = nearestB;
 
-        if (input.justPressed('KeyR')) {
-            if (distToSell < 60) {
-                // Single R at sell shop: sell 1 wheat for 3g
-                if (player.inventory.wheat >= 1) {
-                    player.inventory.wheat -= 1;
-                    player.inventory.gold += 3;
-                    sfx.playCoin();
-                    this.particles.push(new Particle(this.sellShop.x, this.sellShop.y - 40, '#ffd700'));
-                }
-            } else {
-                this._handleR(player);
-            }
-        }
-
-        // Sell Meat Single (Y)
-        if (input.justPressed('KeyY')) {
-            if (distToSell < 60) {
-                if (player.inventory.meat >= 1) {
-                    player.inventory.meat -= 1; player.inventory.gold += 3; sfx.playCoin();
-                    this.particles.push(new Particle(this.sellShop.x, this.sellShop.y - 40, '#ffd700'));
-                }
-            }
-        }
-
-        // Sell Meat Hold (Y)
-        if (distToSell < 60 && input.isDown('KeyY')) {
-            this.yHoldTimer = (this.yHoldTimer || 0) + dt;
-            if (this.yHoldTimer >= 2.0) {
-                this.yHoldTimer = 0;
-                let sold = false;
-                if (player.inventory.meat > 0) { player.inventory.gold += player.inventory.meat * 3; player.inventory.meat = 0; sold = true; }
-                if (sold) { sfx.playCoin(); for (let i = 0; i < 15; i++) this.particles.push(new Particle(this.sellShop.x, this.sellShop.y - 40, '#ffd700')); }
-            }
-        } else {
-            this.yHoldTimer = 0;
-        }
-
-        // Refuge Shop AI
-        if (Math.abs(this.refugeShop.x - player.x) < 60) this.hiringRefuge = true;
-        else this.hiringRefuge = false;
-
-        if (input.justPressed('Digit1')) {
-            if (this.hiringBarrack) this._hireFromMenu(player, 'soldier');
-            else if (this.hiringRefuge) {
-                const cost = this.outpost.level >= 2 ? 5 : 2;
-                if (player.inventory.wheat >= cost) { player.inventory.wheat -= cost; this.workers.push(new Worker(this, this.refugeShop.x)); sfx.playHire(); }
-            }
-        }
-        if (input.justPressed('Digit2')) {
-            if (this.hiringBarrack) this._hireFromMenu(player, 'archer');
-            else if (this.hiringRefuge) {
-                if (player.inventory.wood >= 5) {
-                    player.inventory.wood -= 5;
-                    this.huntersHiredCount++;
-                    const side = (this.huntersHiredCount % 2 === 0) ? -1 : 1; // 1st right, 2nd left
-                    const h = new Hunter(this, this.refugeShop.x, side);
-                    this.hunters.push(h); sfx.playHire();
-                }
-            }
-        }
-
-        if (input.justPressed('KeyV')) this._buildBarrack(player);
-        if (input.justPressed('KeyF')) this._buildFarm(player);
-        if (input.justPressed('KeyU')) this._upgradeFarm(player);
-        if (input.justPressed('KeyH')) this._healSoldier(player);
-        if (input.justPressed('KeyT')) this._upgradeTown(player);
+        if (input.justPressed('KeyR')) this._handleR(player);
         // Waves
         this.waveTimer -= dt;
         if (this.waveTimer <= 0) { this._spawnWave(); this.waveTimer = this.waveInterval; }
@@ -4259,7 +4257,7 @@ class Game {
         ctx.fillRect(0, this.canvas.height - 42, this.canvas.width, 42);
         ctx.fillStyle = '#ddd'; ctx.font = '12px sans-serif';
         ctx.fillText(
-            'A/D Move | Ctrl Sprint | E Action | R Follow | B Wall(30G) | V Barrack(100G) | F Farm(100G) | U Upgrade | T Town | H Heal',
+            'A/D Move | Ctrl Sprint | E Action | R Follow | B Wall(30G) | V Barrack(100G) | F Farm(100G) | 1,2,3 Context/Sell | H Heal',
             12, this.canvas.height - 17
         );
     }
