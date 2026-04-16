@@ -1066,7 +1066,12 @@ class Enemy {
                 if (d < bestDist) { bestDist = d; best = { x: b.x, entity: b, type: 'block' }; }
             }
         }
-        // Ultimate target: outpost
+        if (this.guardX !== null) {
+            // Guard behavior: only aggro if target is within 450px
+            return (bestDist < 450) ? best : null;
+        }
+
+        // Roaming enemy behavior: target outpost if nothing else is closer than 320px
         if (bestDist > 320) {
             best = { x: this.world.outpost.x, entity: this.world.outpost, type: 'outpost' };
         }
@@ -1916,7 +1921,12 @@ class Worker {
         }
         ctx.restore();
 
+        // Unit Label
+        ctx.fillStyle = '#ffaa00'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText('■ WORKER', sx + 15, sy - 30); ctx.textAlign = 'left';
+
         // HP bar
+        if (this.hp < this.maxHp) {
         ctx.fillStyle = '#400'; ctx.fillRect(sx, sy - 18, 30, 4);
         const hpRatio = this.hp / this.maxHp;
         ctx.fillStyle = hpRatio > 0.5 ? '#0c0' : hpRatio > 0.25 ? '#f5a623' : '#e00';
@@ -1928,6 +1938,7 @@ class Worker {
             ctx.fillText(this.dialogue, sx, sy - 48);
         }
     }
+}
 }
 
 // ─── SOLDIER ──────────────────────────────────────────────────────────────────
@@ -2344,6 +2355,10 @@ class Hunter {
         }
 
         ctx.restore();
+
+        // Unit Label
+        ctx.fillStyle = '#ffaa00'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText('■ HUNTER', sx + 10, sy - 30); ctx.textAlign = 'left';
 
         // Removed HUNTER label as per request
         ctx.textAlign = 'left';
@@ -4132,27 +4147,29 @@ class Game {
     // ── HUD ───────────────────────────────────────────────────────────────────
     _drawHUD(ctx) {
         const p = this.player;
-        const pad = 14;
+        const pad = 28;
 
         // ── Stat Panel (top-left) ──
-        ctx.fillStyle = 'rgba(0,0,0,0.75)';
-        ctx.fillRect(8, 8, 270, 158);
+        ctx.fillStyle = 'rgba(0,0,0,0.65)';
+        ctx.beginPath();
+        ctx.roundRect(8, 8, 255, 136, 12);
+        ctx.fill();
 
         // HP bar  (row 1)
         ctx.fillStyle = '#aaa'; ctx.font = 'bold 13px sans-serif';
         ctx.fillText('HP', pad, 30);
-        ctx.fillStyle = '#400'; ctx.fillRect(40, 17, 170, 14);
+        ctx.fillStyle = '#400'; ctx.fillRect(pad + 26, 17, 170, 14);
         ctx.fillStyle = p.hp > 50 ? '#22cc44' : p.hp > 25 ? '#f5a623' : '#e00';
-        ctx.fillRect(40, 17, (p.hp / p.maxHp) * 170, 14);
+        ctx.fillRect(pad + 26, 17, (p.hp / p.maxHp) * 170, 14);
         ctx.fillStyle = '#fff'; ctx.font = '11px sans-serif';
-        ctx.fillText(`${Math.ceil(p.hp)}/${p.maxHp}`, 44, 28);
+        ctx.fillText(`${Math.ceil(p.hp)}/${p.maxHp}`, pad + 30, 28);
 
         // Stamina bar  (row 2)
         ctx.fillStyle = '#aaa'; ctx.font = 'bold 13px sans-serif';
         ctx.fillText('SP', pad, 52);
-        ctx.fillStyle = '#330'; ctx.fillRect(40, 39, 170, 14);
+        ctx.fillStyle = '#330'; ctx.fillRect(pad + 26, 39, 170, 14);
         ctx.fillStyle = '#f5e642';
-        ctx.fillRect(40, 39, (p.stamina / p.maxStamina) * 170, 14);
+        ctx.fillRect(pad + 26, 39, (p.stamina / p.maxStamina) * 170, 14);
 
         // Resources  (row 3)
         // Mini gold coin (matches in-game coin style)
@@ -4165,11 +4182,11 @@ class Game {
         ctx.fillStyle = '#ffd700'; ctx.font = 'bold 13px sans-serif';
         ctx.fillText(`${p.inventory.gold}`, pad + 18, 72);
         ctx.fillStyle = '#8b4513';
-        ctx.fillText(`🪵 ${p.inventory.wood}`, 75, 72);
+        ctx.fillText(`🪵 ${p.inventory.wood}`, pad + 65, 72);
         ctx.fillStyle = '#f5c842';
-        ctx.fillText(`🌾 ${p.inventory.wheat}`, 135, 72);
+        ctx.fillText(`🌾 ${p.inventory.wheat}`, pad + 125, 72);
         ctx.fillStyle = '#c8102e';
-        ctx.fillText(`🍖 ${p.inventory.meat || 0}`, 195, 72);
+        ctx.fillText(`🍖 ${p.inventory.meat || 0}`, pad + 185, 72);
 
         // Weapon + Wave  (row 4)
         const weaponName = p.weapon === 'hammer' ? 'Hammer' : p.weapon === 'sword' ? 'Sword' : p.weapon === 'axe' ? 'Axe' : 'Fists';
@@ -4182,16 +4199,17 @@ class Game {
 
         // Combat units  (row 5)
         const u = this.world.soldiers.length, a = this.world.archers.length;
-        ctx.fillStyle = '#ddd'; ctx.font = '12px sans-serif';
-        ctx.fillText(`🗡 ${u} Soldiers   🏹 ${a} Archers`, pad, 108);
+        ctx.fillStyle = '#fff'; ctx.font = '12px sans-serif';
+        ctx.fillText(`🗡 Soldiers : ${u}`, pad, 108);
+        ctx.fillText(`🏹 Archers : ${a}`, pad + 130, 108);
 
         // Workers & Hunters  (row 6)
         const wk = this.world.workers.length, hu = this.world.hunters.length;
-        ctx.fillStyle = '#aaffcc'; ctx.font = '12px sans-serif';
-        ctx.fillText(`🪓 Workers: ${wk}`, pad, 144);
+        ctx.fillText(`🪓 Workers : ${wk}`, pad, 126);
+        ctx.fillText(`Hunters : ${hu}`, pad + 148, 126);
 
         // Hand-drawn throwing spear icon for hunters
-        const sx2 = pad + 135, sy2 = 137;
+        const sx2 = pad + 138, sy2 = 122;
         ctx.save();
         ctx.translate(sx2, sy2);
         ctx.rotate(-Math.PI / 4); // diagonal angle
@@ -4202,9 +4220,6 @@ class Game {
         ctx.fillStyle = '#d0d8e8';
         ctx.beginPath(); ctx.moveTo(7, 0); ctx.lineTo(14, -2.5); ctx.lineTo(7, 5); ctx.closePath(); ctx.fill();
         ctx.restore();
-
-        ctx.fillStyle = '#aaffcc'; ctx.font = '12px sans-serif';
-        ctx.fillText(`Hunters: ${hu}`, pad + 148, 144);
 
         // Wave warning
         if (this.world.waveTimer < 15 && this.world.waveTimer > 0) {

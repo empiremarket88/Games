@@ -128,11 +128,12 @@ The enemy camp at `x=5000` serves as both a narrative waypoint and a mechanical 
 - **Destruction Logic**: Transitions to a "Ruined" state with separate drawing paths for rubble, providing permanent visual progression once the mid-game objective is cleared.
 - **Wave Anchoring**: Dynamically calculates `spawnX` based on the camp's health. If the camp is alive, enemies originate from the portal; if destroyed, they spawn from the world edge (`4000`).
 
-### 2. Guard AI (Stationary Defense Pattern)
+### 2. Guard AI (Stationary Defense / Sentinel Pattern)
 Implemented a "Return-to-Post" behavior for enemy units to prevent kiting exploits.
-- **Property-Driven AI**: The `guardX` property allows a generic `Enemy` to behave as a defender.
-- **Logic**: If no player/soldier is within `bestDist`, the unit checks its current `x` against `guardX`. If the distance is > 40px, it walks back at 70% speed.
-- **Benefit**: This prevents the "Kiting Bug" where a player could lure every enemy on the map to one side. Guards will stay tethered to their objective.
+- **Property-Driven AI**: The `guardX` property allows a generic `Enemy` to behave as a sentinel.
+- **Aggro Range**: Guards now have a detection limit. They will ignore targets (Player/Units/Outpost) unless they are within **450px**. This prevents guards from leaving their camp to chase distant players.
+- **Logic**: If no target is within the 450px aggro range, the unit checks its current `x` against `guardX`. If the distance is > 40px, it walks back to its post at 70% speed.
+- **Benefit**: This creates distinct "Boss Mini-Zones" and prevents the game from becoming a global chase. Guards will stay tethered to their objective.
 
 ---
 
