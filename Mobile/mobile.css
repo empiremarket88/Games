@@ -86,8 +86,8 @@ body, html {
     pointer-events: auto;
 }
 
-.left { left: 30px; align-items: flex-start; }
-.right { right: 30px; align-items: flex-end; }
+.left { left: 40px; bottom: 30px; align-items: flex-start; }
+.right { right: 40px; bottom: 30px; align-items: flex-end; }
 
 /* Buttons Base */
 .touch-btn {
@@ -114,7 +114,7 @@ body, html {
 .sm { width: var(--touch-size-sm); height: var(--touch-size-sm); border-radius: 10px; }
 
 /* D-Pad */
-.d-pad { display: flex; gap: 20px; }
+.d-pad { display: flex; gap: 40px; }
 
 /* Grids */
 .numbers-grid, .button-grid, .build-grid {
@@ -122,9 +122,9 @@ body, html {
     gap: 10px;
 }
 
-.numbers-grid { grid-template-columns: repeat(3, 1fr); margin-bottom: 10px; }
-.button-grid { grid-template-columns: repeat(3, 1fr); margin-bottom: 10px; }
-.build-grid { grid-template-columns: repeat(3, 1fr); }
+.numbers-grid { grid-template-columns: repeat(3, 1fr); margin-top: 5px; }
+.button-grid { grid-template-columns: repeat(3, 1fr); margin-bottom: 8px; }
+.build-grid { grid-template-columns: repeat(3, 1fr); margin-bottom: 8px; }
 
 .action {
     width: 65px; height: 65px;
@@ -138,6 +138,13 @@ body, html {
     border-radius: 8px;
     font-size: 8px;
     background: rgba(255, 100, 0, 0.1);
+}
+
+.number {
+    width: 45px; height: 35px;
+    border-radius: 6px;
+    font-size: 11px;
+    background: rgba(255, 255, 255, 0.08);
 }
 
 /* Specific Style for Run */

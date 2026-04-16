@@ -35,3 +35,13 @@ Overhaul the interaction system to use a simplified "1, 2, 3" keyboard mapping a
 - **Legacy Cleanup**: Removed T, U, Y mappings.
 
 ---
+
+## 2026-04-16 15:47 - Mobile UI Refinement
+Refine the mobile interface ergonomics based on usability feedback.
+
+### Proposed Changes
+- **Ergonomics**: Repositioned the numerical row (1, 2, 3) to the bottom of the action grid.
+- **Scaling**: Reduced the size of the numerical buttons to minimize screen obstruction.
+- **Movement Fix**: Increased the gap and adjusted the alignment of the D-Pad movement buttons for better thumb separation.
+
+---

@@ -27,3 +27,10 @@ Consolidated all game interactions into a contextual "1, 2, 3" system and stream
 - **Result**: Reduced button bloat, faster economy management, and clear, uniform interaction prompts across the game.
 
 ---
+
+## 2026-04-16 15:47 - Mobile UI Refinement
+Refined the mobile touch interface for better ergonomics and visibility.
+- **Key Features**: Smaller, low-profile numerical buttons (1, 2, 3) moved to the bottom row, and widened D-Pad separation for movement.
+- **Result**: Cleaner game screen with less obstruction and a more natural thumb position for movement and contextual actions.
+
+---
