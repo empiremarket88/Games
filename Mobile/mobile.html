@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Pocket Kingdom Mobile</title>
+    <link rel="stylesheet" href="../style.css">
+    <link rel="stylesheet" href="mobile.css">
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+
+        <!-- Start Overlay (Browser Requirement for Fullscreen/Audio) -->
+        <div id="start-overlay">
+            <div class="modal">
+                <h1>Pocket Kingdom</h1>
+                <p>Build small, dream BIG</p>
+                <button id="start-btn">ENTER KINGDOM</button>
+            </div>
+        </div>
+
+        <!-- Mobile Controls Overlay -->
+        <div id="mobile-controls">
+            <!-- Left Side: Movement -->
+            <div class="control-group left">
+                <div class="touch-btn sm" id="btn-sprint" data-key="ControlLeft">RUN</div>
+                <div class="d-pad">
+                    <div class="touch-btn lg" id="btn-left" data-key="KeyA">←</div>
+                    <div class="touch-btn lg" id="btn-right" data-key="KeyD">→</div>
+                </div>
+            </div>
+
+            <!-- Right Side: Actions -->
+            <div class="control-group right">
+                <!-- Action Row -->
+                <div class="button-grid">
+                    <div class="touch-btn action" id="btn-action" data-key="KeyE">ACTION</div>
+                    <div class="touch-btn action" id="btn-follow" data-key="KeyR">FOLLOW</div>
+                    <div class="touch-btn action" id="btn-heal" data-key="KeyH">HEAL</div>
+                </div>
+                <!-- Build Row (Smaller grid) -->
+                <div class="build-grid">
+                    <div class="touch-btn build" data-key="KeyB">WALL</div>
+                    <div class="touch-btn build" data-key="KeyV">BARRACK</div>
+                    <div class="touch-btn build" data-key="KeyF">FARM</div>
+                    <div class="touch-btn build" data-key="KeyU">UPGRADE</div>
+                    <div class="touch-btn build" data-key="KeyT">TOWN</div>
+                </div>
+            </div>
+            
+            <!-- Utility -->
+            <div id="top-bar">
+                <button id="fullscreen-toggle">⛶</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main game script -->
+    <script src="../app.js"></script>
+    <!-- Mobile bridge script -->
+    <script src="mobile.js"></script>
+</body>
+</html>

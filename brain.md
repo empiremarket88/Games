@@ -99,5 +99,32 @@ One of the key technical achievements was the 1:1 graphics preview tool.
 - **Hybrid Input Detection**: When implementing "Tap vs Hold" mechanics, avoid triggering actions on the `keydown` event. Instead, move the "Tap" logic to the `keyup` (or `justReleased`) event. This allows the system to distinguish between a short press (melee) and a sustained hold (charge) without unwanted initial actions.
 - **Coordinate Space Discipline**: When refactoring UI such as speech bubbles or progress bars, ensure they are rendered *inside* the entity's translated coordinate block. Drawing them after a `ctx.restore()` will cause them to render at the screen origin (top-left) instead of following the entity.
 - **Articulated Actor Pattern**: For animals or units with multi-jointed limbs, use a recursive or structured `_drawLeg` helper. Always define species-specific `yOffset` variables to manage varying leg lengths across different actors (e.g., Deer vs. Rabbit) to ensure they all stand correctly on the ground plane.
+- **Commodity AI Loop**: Specialized units (Hunters/Workers) should utilize a state-driven prioritized search. Hunters specifically prioritize Threats (Enemies) -> Opportunities (Wildlife) -> Commodities (Dropped Meat). Implementing a "Return Threshold" (e.g., carrying 3 meat) prevents units from roaming too far into dangerous territory.
 - **Constructor Initialization Order (Silent Crash Bug)**: When a constructor references `this.X` before `this.X` is assigned, JavaScript throws a `TypeError: Cannot read properties of undefined`. This crash is *silent* to the user — UI buttons appear unresponsive because the function that should run on click (`_initGame`) crashes internally before completing. **Rule**: Never reference `this.entity.property` inside a constructor before that entity is created. Use the known hardcoded value (e.g., `1150` for outpost X) or restructure the initialization order.
 - **Duplicate Class Method Bug**: Defining the same method twice inside a JS class body (e.g., `_toGameOver()`) silently overwrites the earlier definition. Worse, depending on placement, it can corrupt the class prototype and cause seemingly unrelated methods to fail. **Rule**: Always search for duplicate method names (`Select-String '_methodName' app.js`) when debugging unexpected class behavior.
+
+## 🏰 Enemy Infrastructure & AI
+
+### 1. Enemy Command Camp (Objective-Based Design)
+The enemy camp at `x=5000` serves as both a narrative waypoint and a mechanical anchor for waves.
+- **Multi-Layered Visuals**: Uses a combination of `radialGradients` for "Charred Ground" and "Shadow Lanterns", while `ellipse` rotations create a swirling "Void Portal" effect.
+- **Destruction Logic**: Transitions to a "Ruined" state with separate drawing paths for rubble, providing permanent visual progression once the mid-game objective is cleared.
+- **Wave Anchoring**: Dynamically calculates `spawnX` based on the camp's health. If the camp is alive, enemies originate from the portal; if destroyed, they spawn from the world edge (`4000`).
+
+### 2. Guard AI (Stationary Defense Pattern)
+Implemented a "Return-to-Post" behavior for enemy units.
+- **Property-Driven AI**: The `guardX` property allows a generic `Enemy` to behave as a defender.
+- **Logic**: If no player/soldier is within `bestDist`, the unit checks its current `x` against `guardX`. If the distance is > 40px, it walks back at 70% speed.
+- **Benefit**: This prevents the "Kiting Bug" where a player could lure every enemy on the map to one side. Guards will stay tethered to their objective (like the Command Camp).
+
+
+## 🏹 Recent Features (v1.9 - Fauna & Frontiers)
+- **Hunter Unit Integration**:
+  - Specialized AI for ranged pike combat and autonomous meat gathering.
+  - "Hauled Items" visual system that dynamically renders bundles based on inventory count.
+- **Commodity Economy**:
+  - Introduction of Meat as a high-value survival resource (3G base price).
+  - Merchant interaction expansion: Support for individual [Tap] and bulk [Hold] sales using the `KeyY` binding.
+- **Project Roadmap**: Established a centralized roadmap in `/docs/plan.md` to track project evolution across multiple versions.
+
+## ⚔️ Recent Features (v1.8 - Inferno Upgrade)

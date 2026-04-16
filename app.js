@@ -52,18 +52,26 @@ function applyHitGlow(ctx, entity, glowRgb = '255,255,255') {
 class Input {
     constructor() {
         this.keys = {}; this.pressed = {}; this.released = {};
+        this.externalKeys = {}; // track touch/virtual buttons
         window.addEventListener('keydown', e => {
             sfx.init();
             if (!this.keys[e.code]) this.pressed[e.code] = true;
             this.keys[e.code] = true;
-            e.preventDefault();
+            // Only prevent default for game-related keys to allow browser shortcuts
+            if(['KeyA','KeyD','KeyW','KeyS','Space','KeyE','KeyR','KeyB','KeyV','KeyF','KeyU','KeyH','KeyT','ArrowLeft','ArrowRight','ControlLeft','ControlRight'].includes(e.code)) e.preventDefault();
         });
-        window.addEventListener('keyup', e => { 
-            this.keys[e.code] = false; 
+        window.addEventListener('keyup', e => {
+            this.keys[e.code] = false;
             this.released[e.code] = true;
         });
     }
-    isDown(c) { return !!this.keys[c]; }
+    setKey(code, isPressed) {
+        sfx.init();
+        if (isPressed && !this.externalKeys[code]) this.pressed[code] = true;
+        if (!isPressed && this.externalKeys[code]) this.released[code] = true;
+        this.externalKeys[code] = isPressed;
+    }
+    isDown(c) { return !!this.keys[c] || !!this.externalKeys[c]; }
     justPressed(c) { if (this.pressed[c]) { this.pressed[c] = false; return true; } return false; }
     justReleased(c) { if (this.released[c]) { this.released[c] = false; return true; } return false; }
 }
@@ -111,7 +119,7 @@ class Particle {
             ctx.translate(sx, this.y);
             ctx.rotate(Math.sin(this.time * 4) * 0.5 + (this.type === 'petal' ? this.time * 2 : 0));
             const size = this.type === 'petal' ? 4 : 6;
-            ctx.fillRect(-size/2, -size/2, size, size);
+            ctx.fillRect(-size / 2, -size / 2, size, size);
         } else {
             ctx.fillRect(sx, this.y, 6, 6);
         }
@@ -133,7 +141,7 @@ class Bird {
         this.time = Math.random() * 10;
         this.wingPos = 0;
         this.dead = false;
-        this.color = ['#333', '#555', '#444'][Math.floor(Math.random()*3)];
+        this.color = ['#333', '#555', '#444'][Math.floor(Math.random() * 3)];
     }
     takeOff() {
         if (this.state === 'perched') {
@@ -166,7 +174,7 @@ class Bird {
         ctx.translate(sx, this.y);
         ctx.fillStyle = this.color;
         // Body
-        ctx.beginPath(); ctx.ellipse(0, 0, 4, 3, 0, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(0, 0, 4, 3, 0, 0, Math.PI * 2); ctx.fill();
         // Wings
         const wY = this.state === 'perched' ? 2 : this.wingPos * 6;
         ctx.beginPath();
@@ -341,7 +349,7 @@ class WoodBlock {
         for (let i = 1; i < 3; i++) { ctx.beginPath(); ctx.moveTo(sx, this.y + i * 13); ctx.lineTo(sx + this.w, this.y + i * 13); ctx.stroke(); }
         ctx.beginPath(); ctx.moveTo(sx + this.w / 2, this.y); ctx.lineTo(sx + this.w / 2, this.y + this.h); ctx.stroke();
         ctx.beginPath();
-        
+
         // --- Improved HP Bar ---
         const hpY = this.y + this.h + 5;
         const hpRatio = this.hp / this.maxHp;
@@ -349,7 +357,7 @@ class WoodBlock {
         ctx.fillStyle = hpRatio > 0.5 ? '#00f5ff' : hpRatio > 0.25 ? '#ffaa00' : '#ff0054';
         ctx.fillRect(sx, hpY, this.w * hpRatio, 6);
         ctx.strokeStyle = 'white'; ctx.lineWidth = 1; ctx.strokeRect(sx, hpY, this.w, 6);
-        
+
         ctx.restore();
     }
 }
@@ -359,7 +367,7 @@ class Decoration {
     constructor(world, x, type) {
         this.world = world; this.x = x; this.y = world.groundY + Math.random() * 6 - 3;
         this.type = type; // 'grass', 'flower'
-        this.color = type === 'grass' ? '#3d5e3a' : ['#ffafcc', '#ff595e', '#ffca3a', '#fb6f92', '#8338ec'][Math.floor(Math.random()*5)];
+        this.color = type === 'grass' ? '#3d5e3a' : ['#ffafcc', '#ff595e', '#ffca3a', '#fb6f92', '#8338ec'][Math.floor(Math.random() * 5)];
         this.size = type === 'grass' ? 6 + Math.random() * 10 : 12 + Math.random() * 6;
         this.state = 'bud';
         this.stateTimer = 5 + Math.random() * 20;
@@ -378,7 +386,7 @@ class Decoration {
             }
             // Petal drop chance in open state
             if (this.state === 'open' && Math.random() < 0.007) {
-                this.world.particles.push(new Particle(this.x, this.y - this.size, this.color, (Math.random()-0.5)*40, -Math.random()*20, 'petal'));
+                this.world.particles.push(new Particle(this.x, this.y - this.size, this.color, (Math.random() - 0.5) * 40, -Math.random() * 20, 'petal'));
             }
         }
     }
@@ -390,25 +398,25 @@ class Decoration {
         ctx.translate(sx, this.y);
         if (this.type === 'grass') {
             ctx.strokeStyle = this.color; ctx.lineWidth = 1.8;
-            ctx.beginPath(); ctx.moveTo(0,0); ctx.quadraticCurveTo(sway, -this.size/2, sway, -this.size); 
-            ctx.moveTo(0,0); ctx.quadraticCurveTo(-sway, -this.size/2, -sway, -this.size*0.7);
+            ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(sway, -this.size / 2, sway, -this.size);
+            ctx.moveTo(0, 0); ctx.quadraticCurveTo(-sway, -this.size / 2, -sway, -this.size * 0.7);
             ctx.stroke();
         } else if (this.type === 'flower') {
             ctx.strokeStyle = '#2d4c1e'; ctx.lineWidth = 1.5;
-            ctx.beginPath(); ctx.moveTo(0,0); ctx.quadraticCurveTo(sway, -this.size/2, sway, -this.size); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(sway, -this.size / 2, sway, -this.size); ctx.stroke();
             ctx.translate(sway, -this.size);
             if (this.state === 'bud') {
-                ctx.fillStyle = '#4a7c2c'; ctx.beginPath(); ctx.arc(0,0, 3, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = '#4a7c2c'; ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI * 2); ctx.fill();
             } else {
-                let s = this.state === 'blooming' ? 0.3 + (1 - this.stateTimer/4)*0.7 : (this.state === 'open' ? 1 : 0.7);
+                let s = this.state === 'blooming' ? 0.3 + (1 - this.stateTimer / 4) * 0.7 : (this.state === 'open' ? 1 : 0.7);
                 ctx.scale(s, s);
                 ctx.fillStyle = this.color;
                 if (this.state === 'faded') ctx.globalAlpha = 0.5;
-                for(let i=0; i<5; i++) {
-                    ctx.rotate((Math.PI*2)/5);
-                    ctx.beginPath(); ctx.ellipse(4, 0, 5, 3, 0, 0, Math.PI*2); ctx.fill();
+                for (let i = 0; i < 5; i++) {
+                    ctx.rotate((Math.PI * 2) / 5);
+                    ctx.beginPath(); ctx.ellipse(4, 0, 5, 3, 0, 0, Math.PI * 2); ctx.fill();
                 }
-                ctx.fillStyle = '#ffea00'; ctx.beginPath(); ctx.arc(0,0, 2, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = '#ffea00'; ctx.beginPath(); ctx.arc(0, 0, 2, 0, Math.PI * 2); ctx.fill();
             }
         }
         ctx.restore();
@@ -439,9 +447,9 @@ class Ladybug {
         ctx.beginPath(); ctx.ellipse(sx, this.y, 2.2, 1.8, 0, 0, Math.PI * 2); ctx.fill();
         // Spots
         ctx.fillStyle = '#000';
-        ctx.beginPath(); ctx.arc(sx - 0.8, this.y - 0.5, 0.5, 0, Math.PI*2); ctx.fill();
-        ctx.beginPath(); ctx.arc(sx + 0.8, this.y + 0.5, 0.5, 0, Math.PI*2); ctx.fill();
-        ctx.beginPath(); ctx.arc(sx, this.y, 0.4, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(sx - 0.8, this.y - 0.5, 0.5, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(sx + 0.8, this.y + 0.5, 0.5, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(sx, this.y, 0.4, 0, Math.PI * 2); ctx.fill();
     }
 }
 
@@ -644,10 +652,10 @@ class HeroFireball {
         this.age += dt;
         if (this.age > 2.5) { this.dead = true; return; }
         this.x += this.vx * dt;
-        
+
         // Embers trail
         if (Math.random() < 0.4) {
-            this.world.particles.push(new Particle(this.x, this.y + (Math.random()-0.5)*10, '#ffaa00', -this.vx*0.2, (Math.random()-0.5)*40));
+            this.world.particles.push(new Particle(this.x, this.y + (Math.random() - 0.5) * 10, '#ffaa00', -this.vx * 0.2, (Math.random() - 0.5) * 40));
         }
 
         for (const e of this.world.enemies) {
@@ -657,7 +665,7 @@ class HeroFireball {
                 e.takeDamage(this.dmg);
                 // Explosion effect
                 for (let i = 0; i < 12; i++) {
-                    this.world.particles.push(new Particle(this.x, this.y, '#ff4400', (Math.random()-0.5)*300, (Math.random()-0.5)*300));
+                    this.world.particles.push(new Particle(this.x, this.y, '#ff4400', (Math.random() - 0.5) * 300, (Math.random() - 0.5) * 300));
                 }
                 this.dead = true; return;
             }
@@ -672,15 +680,15 @@ class HeroFireball {
         g.addColorStop(0, '#fff'); g.addColorStop(0.3, '#ffcc00'); g.addColorStop(1, 'rgba(255,68,0,0)');
         ctx.fillStyle = g;
         ctx.beginPath(); ctx.arc(sx, this.y, 15, 0, Math.PI * 2); ctx.fill();
-        
+
         // Inner core
         ctx.fillStyle = '#ff4400';
         ctx.beginPath(); ctx.arc(sx, this.y, 6, 0, Math.PI * 2); ctx.fill();
-        
+
         // Flame tail oscillations
         const t = this.world.game ? this.world.game.lastTime / 1000 : 0;
         ctx.fillStyle = '#ffaa00';
-        for(let i=0; i<3; i++) {
+        for (let i = 0; i < 3; i++) {
             const offX = (this.facingRight ? -1 : 1) * (10 + i * 8);
             const offY = Math.sin(t * 20 + i) * 6;
             ctx.beginPath(); ctx.arc(sx + offX, this.y + offY, 5 - i, 0, Math.PI * 2); ctx.fill();
@@ -704,13 +712,13 @@ class LaserBeam {
     update(dt) {
         this.age += dt;
         if (this.age > this.maxAge) { this.dead = true; return; }
-        
+
         // Damage once per beam
         if (!this.hasHit) {
             this.hasHit = true;
             // Check along segments of the beam for intersection
             const targets = [...this.world.farms, ...this.world.barracks, ...this.world.woodBlocks, this.world.outpost, this.world.game.player, ...this.world.soldiers, ...this.world.archers, ...this.world.workers, ...this.world.hunters];
-            
+
             // Simple line-circle intersection estimate or just check proximity to the line
             for (const t of targets) {
                 if (!t || t.dead) continue;
@@ -741,32 +749,32 @@ class LaserBeam {
         if (this.dead) return;
         const sx = this.x - cam.x, sy = this.y;
         const stx = this.tx - cam.x, sty = this.ty;
-        
+
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
         const alpha = Math.sin((this.age / this.maxAge) * Math.PI);
-        
+
         // Outer Glow
         ctx.strokeStyle = '#00f5ff';
         ctx.lineWidth = 15 * alpha;
         ctx.lineCap = 'round';
         ctx.globalAlpha = 0.5 * alpha;
         ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(stx, sty); ctx.stroke();
-        
+
         // Inner Core
         ctx.strokeStyle = '#fff';
         ctx.lineWidth = 4 * alpha;
         ctx.globalAlpha = 1.0 * alpha;
         ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(stx, sty); ctx.stroke();
-        
+
         // Impact Sparks
         if (this.age < 0.2) {
             ctx.fillStyle = '#00f5ff';
-            for(let i=0; i<3; i++) {
-                ctx.beginPath(); ctx.arc(stx + (Math.random()-0.5)*20, sty + (Math.random()-0.5)*20, 4, 0, Math.PI*2); ctx.fill();
+            for (let i = 0; i < 3; i++) {
+                ctx.beginPath(); ctx.arc(stx + (Math.random() - 0.5) * 20, sty + (Math.random() - 0.5) * 20, 4, 0, Math.PI * 2); ctx.fill();
             }
         }
-        
+
         ctx.restore();
     }
 }
@@ -893,7 +901,7 @@ class Archer {
             ctx.beginPath();
             if (this.shootCd <= 1.3) {
                 ctx.fillStyle = '#8b4513'; ctx.fillRect(8 + pull, 8, 20, 2);
-                ctx.fillStyle = '#bbb'; 
+                ctx.fillStyle = '#bbb';
                 ctx.beginPath(); ctx.moveTo(33 + pull, 9); ctx.lineTo(28 + pull, 6); ctx.lineTo(28 + pull, 12); ctx.fill();
             }
         } else {
@@ -932,7 +940,7 @@ class ForegroundTree {
     constructor(world, x) {
         this.world = world; this.x = x;
         // 10% variation on base height
-        this.height = 140 + (Math.random() - 0.5) * 28; 
+        this.height = 140 + (Math.random() - 0.5) * 28;
         this.y = world.groundY;
         this.health = 3; this.dead = false;
         this.hitAnimation = 0; this.respawnTimer = 0;
@@ -946,7 +954,7 @@ class ForegroundTree {
         for (let i = 0; i < 4; i++) this.world.particles.push(new Particle(this.x + 10, this.y - 40, '#8b4513'));
         // Leaf bits
         for (let i = 0; i < 8; i++) this.world.particles.push(new Particle(this.x + 10, this.y - this.height + 40, '#228b22', undefined, undefined, 'leaf'));
-        
+
         // All birds fly away
         this.perchedBirds.forEach(b => b.takeOff());
 
@@ -970,11 +978,11 @@ class ForegroundTree {
         const sx = this.x - cam.x;
         ctx.save();
         if (this.hitAnimation > 0) ctx.translate(Math.sin(this.hitAnimation * 50) * 5, 0);
-        
+
         // Trunk (Bottom of tree)
         ctx.fillStyle = '#2b1a0d';
         ctx.fillRect(sx + 5, this.y - this.height, 10, this.height);
-        
+
         // Roots/Base area
         ctx.fillStyle = '#1a0d00';
         ctx.fillRect(sx, this.y - 10, 20, 10);
@@ -988,7 +996,7 @@ class ForegroundTree {
         ctx.beginPath(); ctx.arc(sx - 20, fy + 10, 35 * cs, 0, Math.PI * 2); ctx.fill();
         ctx.beginPath(); ctx.arc(sx + 40, fy + 10, 35 * cs, 0, Math.PI * 2); ctx.fill();
         ctx.beginPath(); ctx.arc(sx + 10, fy + 30, 40 * cs, 0, Math.PI * 2); ctx.fill();
-        
+
         ctx.restore();
     }
     drawStump(ctx, cam) {
@@ -1005,12 +1013,13 @@ class ForegroundTree {
 
 // ─── ENEMY ────────────────────────────────────────────────────────────────────
 class Enemy {
-    constructor(world, x) {
+    constructor(world, x, guardX = null) {
         this.world = world; this.x = x; this.y = 0;
         this.vx = 0; this.vy = 0; this.facingRight = false;
         this.time = 0; this.maxHp = 60; this.hp = 60;
         this.speed = 80; this.dead = false; this.attackCd = 0; this.hurtTimer = 0;
         this.coinDropped = false; this.attackTimer = 0;
+        this.guardX = guardX;
     }
     takeDamage(dmg) {
         this.hp -= dmg; triggerHitGlow(this); sfx.playHit();
@@ -1072,7 +1081,23 @@ class Enemy {
         if (this.attackTimer > 0) this.attackTimer -= dt;
 
         const target = this._findTarget();
-        if (!target) return;
+        if (!target) {
+            if (this.guardX !== null) {
+                const distHome = Math.abs(this.x - this.guardX);
+                if (distHome > 40) {
+                    const dir = Math.sign(this.guardX - this.x);
+                    this.vx = dir * (this.speed * 0.7);
+                    this.facingRight = dir > 0;
+                    this.x += this.vx * dt;
+                } else {
+                    this.vx = 0;
+                    this.facingRight = false; // face left normally
+                }
+            } else {
+                this.vx = 0;
+            }
+            return;
+        }
         const dist = Math.abs(this.x - target.x);
         const attackRange = target.type === 'block' ? 55 : 65;
 
@@ -1115,7 +1140,7 @@ class Enemy {
         ctx.fillStyle = '#1a0022'; ctx.fillRect(5 - ls, 40, 8, 20); ctx.fillRect(17 + ls, 40, 8, 20);
         ctx.fillStyle = '#2d003d'; ctx.fillRect(0, 15, 30, 30);
         ctx.fillStyle = 'purple'; ctx.fillRect(8, 18, 14, 10);
-        
+
         // --- Swinging Arm & Sword ---
         ctx.save();
         ctx.translate(27, 24); // shoulder joint
@@ -1140,8 +1165,8 @@ class Enemy {
 
 // ─── ENEMY ARCHER ─────────────────────────────────────────────────────────────
 class EnemyArcher extends Enemy {
-    constructor(world, x) {
-        super(world, x);
+    constructor(world, x, guardX = null) {
+        super(world, x, guardX);
         this.maxHp = 40; this.hp = 40;
         this.shootRange = 320; this.preferDist = 200;
         this.drawTimer = 0; this.shootCd = 0;
@@ -1216,8 +1241,8 @@ class EnemyArcher extends Enemy {
 
 // ─── BOSS DRAGON ──────────────────────────────────────────────────────────────
 class EnemyDragon extends Enemy {
-    constructor(world, x) {
-        super(world, x);
+    constructor(world, x, guardX = null) {
+        super(world, x, guardX);
         this.maxHp = 300; this.hp = 300;
         this.speed = 36; // -10% speed
         this.attackCd = 0; this.shootCd = 0;
@@ -1232,9 +1257,9 @@ class EnemyDragon extends Enemy {
         for (const t of targets) {
             if (t.dead || (t.hp !== undefined && t.hp <= 0)) continue;
             const d = Math.abs(this.x - t.x);
-            if (d < bestDist) { 
-                bestDist = d; 
-                best = { x: t.x, entity: t, type: 'any' }; 
+            if (d < bestDist) {
+                bestDist = d;
+                best = { x: t.x, entity: t, type: 'any' };
             }
         }
         return best;
@@ -1242,7 +1267,7 @@ class EnemyDragon extends Enemy {
     update(dt) {
         this.time += dt;
         // Fix leg clipping through ground. Foot reaches local y = 140.
-        this.y = this.world.groundY - 140; 
+        this.y = this.world.groundY - 140;
         this.vy = 0;
         if (this.attackCd > 0) this.attackCd -= dt;
         if (this.shootCd > 0) this.shootCd -= dt;
@@ -1268,7 +1293,7 @@ class EnemyDragon extends Enemy {
             this.vx = 0;
             const dir = Math.sign(target.x - this.x);
             this.facingRight = dir > 0;
-            
+
             // --- LASER BEAM ATTACK ---
             if (this.shootCd <= 0) {
                 this.shootCd = 3.5;
@@ -1277,7 +1302,7 @@ class EnemyDragon extends Enemy {
                 const targetY = target.entity?.y ?? (this.world.groundY - 30);
                 this.world.arrows.push(new LaserBeam(this.world, mouthX, mouthY, target.x, targetY));
             }
-            
+
             // --- MELEE ATTACK ---
             if (dist < 150 && this.attackCd <= 0) {
                 this.attackCd = 2.0;
@@ -1296,10 +1321,10 @@ class EnemyDragon extends Enemy {
     draw(ctx, cam) {
         if (this.dead) return;
         const sx = this.x - cam.x, sy = this.y;
-        
+
         ctx.save();
         applyHitGlow(ctx, this, '0,245,255');
-        
+
         // --- Scale & Base Translation ---
         ctx.translate(sx, sy);
         if (!this.facingRight) ctx.scale(-1, 1);
@@ -1315,7 +1340,7 @@ class EnemyDragon extends Enemy {
 
         // --- Shadow ---
         ctx.fillStyle = 'rgba(0,0,0,0.3)';
-        ctx.beginPath(); ctx.ellipse(-20, 140, 90, 20, 0, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(-20, 140, 90, 20, 0, 0, Math.PI * 2); ctx.fill();
 
         ctx.translate(0, bob);
 
@@ -1335,11 +1360,11 @@ class EnemyDragon extends Enemy {
         const tailWag = Math.sin(this.time * 3) * 15;
         let lastX = -35, lastY = 10;
         ctx.save();
-        for(let i=1; i<=6; i++) {
+        for (let i = 1; i <= 6; i++) {
             const segRot = (tailWag / 10) * (i / 6) - 0.2;
             ctx.translate(lastX, lastY); ctx.rotate(segRot);
             ctx.fillStyle = colors.plate; const size = 45 - i * 6;
-            ctx.beginPath(); ctx.roundRect(-size, -size/2, size, size, 5); ctx.fill();
+            ctx.beginPath(); ctx.roundRect(-size, -size / 2, size, size, 5); ctx.fill();
             ctx.strokeStyle = colors.lightMetal; ctx.lineWidth = 1; ctx.stroke();
             lastX = -size + 5; lastY = 0;
         }
@@ -1349,7 +1374,7 @@ class EnemyDragon extends Enemy {
         const bodyGrad = ctx.createLinearGradient(0, -60, 0, 60);
         bodyGrad.addColorStop(0, '#2c2c34'); bodyGrad.addColorStop(1, '#0a0a0d');
         ctx.fillStyle = bodyGrad;
-        ctx.beginPath(); ctx.ellipse(15, 0, 60, 95, 0.4, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(15, 0, 60, 95, 0.4, 0, Math.PI * 2); ctx.fill();
         // Neon Conduits
         ctx.strokeStyle = colors.neon; ctx.lineWidth = 2; ctx.globalAlpha = 0.6 + breath * 0.4;
         ctx.beginPath(); ctx.moveTo(-5, -40); ctx.quadraticCurveTo(20, -50, 35, -20); ctx.stroke();
@@ -1360,13 +1385,13 @@ class EnemyDragon extends Enemy {
         ctx.save();
         ctx.translate(50, -10 + armWave);
         ctx.strokeStyle = colors.metal; ctx.lineWidth = 12; ctx.lineCap = 'round';
-        ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(30, 20); ctx.stroke();
-        ctx.translate(30, 20); ctx.rotate(0.5 + Math.sin(this.time*8)*0.2);
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(30, 20); ctx.stroke();
+        ctx.translate(30, 20); ctx.rotate(0.5 + Math.sin(this.time * 8) * 0.2);
         ctx.strokeStyle = colors.lightMetal; ctx.lineWidth = 8;
-        ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(40, -10); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(40, -10); ctx.stroke();
         // Claw
         ctx.fillStyle = colors.lightMetal; ctx.save(); ctx.translate(40, -10);
-        ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(15, 0); ctx.lineTo(12, 5); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(15, 0); ctx.lineTo(12, 5); ctx.closePath(); ctx.fill();
         ctx.restore();
         ctx.restore();
 
@@ -1380,15 +1405,15 @@ class EnemyDragon extends Enemy {
         // Visor
         ctx.fillStyle = '#0a0a0a'; ctx.fillRect(15, -12, 65, 18);
         const scanX = 15 + ((this.time * 80) % 65);
-        
+
         let charge = 1 - (this.shootCd / 3.5); if (charge < 0) charge = 0;
-        ctx.fillStyle = `rgba(0, 255, 255, ${0.1 + charge * 0.9})`; 
+        ctx.fillStyle = `rgba(0, 255, 255, ${0.1 + charge * 0.9})`;
         ctx.fillRect(15, -12, 65 * charge, 18); // Fill bar based on laser charge
-        
+
         ctx.fillStyle = '#fff'; ctx.fillRect(scanX, -12, 4, 18);
         // Teeth
         ctx.fillStyle = '#d1d1d1'; const jawDrop = 5 + Math.sin(this.time * 12) * 4;
-        for(let i=0; i<6; i++) { ctx.beginPath(); ctx.moveTo(25+i*10, 10); ctx.lineTo(30+i*10, 22); ctx.lineTo(35+i*10, 10); ctx.fill(); }
+        for (let i = 0; i < 6; i++) { ctx.beginPath(); ctx.moveTo(25 + i * 10, 10); ctx.lineTo(30 + i * 10, 22); ctx.lineTo(35 + i * 10, 10); ctx.fill(); }
         // Lower Jaw
         ctx.fillStyle = colors.plate; ctx.save(); ctx.translate(10, 30 + jawDrop);
         ctx.beginPath(); ctx.roundRect(0, 0, 70, 15, [2, 10, 10, 2]); ctx.fill();
@@ -1398,7 +1423,7 @@ class EnemyDragon extends Enemy {
         const pulse = 30 + breath * 15;
         const pGrad = ctx.createRadialGradient(100, 10, 5, 100, 10, pulse);
         pGrad.addColorStop(0, '#fff'); pGrad.addColorStop(0.2, colors.neon); pGrad.addColorStop(1, 'transparent');
-        ctx.fillStyle = pGrad; ctx.beginPath(); ctx.arc(100, 10, pulse, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = pGrad; ctx.beginPath(); ctx.arc(100, 10, pulse, 0, Math.PI * 2); ctx.fill();
         ctx.globalCompositeOperation = 'source-over';
         ctx.restore();
 
@@ -1409,11 +1434,11 @@ class EnemyDragon extends Enemy {
         ctx.fillStyle = colors.plate; ctx.beginPath(); ctx.roundRect(-30, -25, 60, 80, 20); ctx.fill();
         ctx.translate(0, 60); ctx.rotate(0.2 + walk * 0.3);
         ctx.fillStyle = colors.plate; ctx.fillRect(-20, 0, 40, 65);
-        ctx.strokeStyle = colors.neon; ctx.strokeRect(-20,0,40,65);
+        ctx.strokeStyle = colors.neon; ctx.strokeRect(-20, 0, 40, 65);
         ctx.restore();
 
         ctx.restore();
-        
+
         // --- HP Bar (Centered) ---
         const hpY = sy - 150;
         ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(sx - 50, hpY, 200, 12);
@@ -1429,7 +1454,7 @@ class Shop {
     }
     draw(ctx, cam, player) {
         const sx = this.x - cam.x, dist = Math.abs(this.x - player.x);
-        
+
         ctx.save();
         if (this.type === 'refuge') {
             // Triangle tent & campfire
@@ -1440,29 +1465,29 @@ class Shop {
             ctx.strokeStyle = '#4a3622'; ctx.lineWidth = 3;
             ctx.beginPath(); ctx.moveTo(sx, this.y - 45); ctx.lineTo(sx - 35, this.y); ctx.stroke();
             ctx.beginPath(); ctx.moveTo(sx, this.y - 45); ctx.lineTo(sx + 35, this.y); ctx.stroke();
-            
+
             // tiny campfire
             const t = this.world.game ? this.world.game.lastTime / 1000 : 0;
             ctx.fillStyle = '#442211'; ctx.fillRect(sx + 40, this.y - 4, 15, 4);
             const fireH = 8 + Math.random() * 6;
-            ctx.fillStyle = '#ffaa00'; ctx.beginPath(); ctx.moveTo(sx + 47, this.y - 4); ctx.lineTo(sx + 42, this.y - 4 - fireH); ctx.lineTo(sx + 52, this.y - 4 - fireH*0.8); ctx.fill();
-            ctx.fillStyle = '#ff4400'; ctx.beginPath(); ctx.moveTo(sx + 47, this.y - 4); ctx.lineTo(sx + 45, this.y - 4 - fireH*0.6); ctx.lineTo(sx + 49, this.y - 4 - fireH*0.5); ctx.fill();
+            ctx.fillStyle = '#ffaa00'; ctx.beginPath(); ctx.moveTo(sx + 47, this.y - 4); ctx.lineTo(sx + 42, this.y - 4 - fireH); ctx.lineTo(sx + 52, this.y - 4 - fireH * 0.8); ctx.fill();
+            ctx.fillStyle = '#ff4400'; ctx.beginPath(); ctx.moveTo(sx + 47, this.y - 4); ctx.lineTo(sx + 45, this.y - 4 - fireH * 0.6); ctx.lineTo(sx + 49, this.y - 4 - fireH * 0.5); ctx.fill();
         } else if (this.type === 'axe' || this.type === 'hammer') {
             // Weapon / Forge Shop
             ctx.fillStyle = '#2b2b2b'; ctx.fillRect(sx - 45, this.y - 70, 90, 70); // Frame
             ctx.fillStyle = '#111'; ctx.fillRect(sx - 40, this.y - 65, 80, 65); // Interior
             // Forge fire glow
             const t = this.world.game ? this.world.game.lastTime / 1000 : 0;
-            ctx.fillStyle = `rgba(255, 68, 0, ${0.4 + Math.sin(t*10)*0.1})`;
+            ctx.fillStyle = `rgba(255, 68, 0, ${0.4 + Math.sin(t * 10) * 0.1})`;
             ctx.fillRect(sx - 30, this.y - 30, 60, 30);
             // Anvil / Workbench
-            ctx.fillStyle = '#444'; ctx.fillRect(sx - 20, this.y - 20, 40, 20); 
-            ctx.fillRect(sx - 25, this.y - 30, 50, 10); 
+            ctx.fillStyle = '#444'; ctx.fillRect(sx - 20, this.y - 20, 40, 20);
+            ctx.fillRect(sx - 25, this.y - 30, 50, 10);
             ctx.fillStyle = '#222'; ctx.fillRect(sx - 5, this.y - 20, 10, 20);
             if (this.type === 'axe') {
                 ctx.fillStyle = '#aaa'; ctx.fillRect(sx - 35, this.y - 50, 4, 30); ctx.fillRect(sx + 30, this.y - 50, 4, 30);
                 ctx.fillStyle = '#8b4513'; ctx.fillRect(sx - 38, this.y - 25, 10, 4); ctx.fillRect(sx + 27, this.y - 25, 10, 4);
-                ctx.fillStyle = '#ddd'; ctx.fillRect(sx, this.y - 60, 10, 3); ctx.fillStyle = '#8b4513'; ctx.fillRect(sx+3, this.y-57, 4, 20);
+                ctx.fillStyle = '#ddd'; ctx.fillRect(sx, this.y - 60, 10, 3); ctx.fillStyle = '#8b4513'; ctx.fillRect(sx + 3, this.y - 57, 4, 20);
             } else {
                 const t = this.world.game ? this.world.game.lastTime / 1000 : 0;
                 const p = 0.7 + Math.sin(t * 8) * 0.3;
@@ -1471,9 +1496,9 @@ class Shop {
                 ctx.fillStyle = '#222'; ctx.fillRect(sx - 12, this.y - 65, 24, 15); // Large Head
                 ctx.fillStyle = `rgba(255, 100, 0, ${p})`; ctx.fillRect(sx - 10, this.y - 60, 20, 5); // Glowing Core
                 ctx.fillStyle = '#ffaa00'; // Flame flickering
-                for(let i=0; i<3; i++) {
-                    const h = 8 + Math.sin(t*15+i)*4;
-                    ctx.fillRect(sx - 8 + i*7, this.y - 65 - h, 2, h);
+                for (let i = 0; i < 3; i++) {
+                    const h = 8 + Math.sin(t * 15 + i) * 4;
+                    ctx.fillRect(sx - 8 + i * 7, this.y - 65 - h, 2, h);
                 }
             }
             // Roof
@@ -1490,11 +1515,11 @@ class Shop {
                 ctx.beginPath(); ctx.arc(sx - 40 + i * 10, this.y - 40, 5, 0, Math.PI); ctx.fill();
             }
             // Sacks & Logs
-            ctx.fillStyle = '#e8cfa6'; ctx.beginPath(); ctx.ellipse(sx - 50, this.y - 10, 12, 10, 0, 0, Math.PI*2); ctx.fill(); 
-            ctx.beginPath(); ctx.ellipse(sx - 42, this.y - 8, 10, 8, 0, 0, Math.PI*2); ctx.fill();
-            ctx.fillStyle = '#d2b48c'; ctx.fillRect(sx - 50, this.y - 20, 6, 10); ctx.fillRect(sx - 42, this.y - 18, 6, 10); 
-            ctx.fillStyle = '#5c3a21'; ctx.beginPath(); ctx.arc(sx + 45, this.y - 10, 8, 0, Math.PI*2); ctx.arc(sx + 55, this.y - 10, 8, 0, Math.PI*2); ctx.arc(sx + 50, this.y - 20, 8, 0, Math.PI*2); ctx.fill();
-            ctx.fillStyle = '#e6c280'; ctx.beginPath(); ctx.arc(sx + 45, this.y - 10, 6, 0, Math.PI*2); ctx.arc(sx + 55, this.y - 10, 6, 0, Math.PI*2); ctx.arc(sx + 50, this.y - 20, 6, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#e8cfa6'; ctx.beginPath(); ctx.ellipse(sx - 50, this.y - 10, 12, 10, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.ellipse(sx - 42, this.y - 8, 10, 8, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#d2b48c'; ctx.fillRect(sx - 50, this.y - 20, 6, 10); ctx.fillRect(sx - 42, this.y - 18, 6, 10);
+            ctx.fillStyle = '#5c3a21'; ctx.beginPath(); ctx.arc(sx + 45, this.y - 10, 8, 0, Math.PI * 2); ctx.arc(sx + 55, this.y - 10, 8, 0, Math.PI * 2); ctx.arc(sx + 50, this.y - 20, 8, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#e6c280'; ctx.beginPath(); ctx.arc(sx + 45, this.y - 10, 6, 0, Math.PI * 2); ctx.arc(sx + 55, this.y - 10, 6, 0, Math.PI * 2); ctx.arc(sx + 50, this.y - 20, 6, 0, Math.PI * 2); ctx.fill();
             // Golden Dollar Sign on roof
             ctx.fillStyle = '#ffd700'; ctx.font = 'bold 24px serif'; ctx.textAlign = 'center';
             ctx.fillText('$', sx, this.y - 85); ctx.textAlign = 'left';
@@ -1545,7 +1570,7 @@ class Shop {
                 ctx.fillText(`Hire Worker ${cost} Wheat [1]`, sx, this.y - 128);
                 ctx.fillStyle = '#aaa'; ctx.font = '11px sans-serif';
                 ctx.fillText('Chops trees automatically', sx, this.y - 112);
-                
+
                 ctx.fillStyle = '#c8102e'; ctx.font = 'bold 13px sans-serif';
                 ctx.fillText('Hire Hunter 5 Wood [2]', sx, this.y - 94);
                 ctx.fillStyle = '#aaa'; ctx.font = '11px sans-serif';
@@ -1576,7 +1601,7 @@ class NPC {
         this.dialogue = ''; this.dialogueTimer = 0;
         this.replyTimer = 0; this.replyContent = '';
         this.hairStyle = Math.random() > 0.5 ? 'spiky' : 'normal';
-        this.hairColor = ['#5a3826', '#333333', '#884422', '#cca444'][Math.floor(Math.random()*4)];
+        this.hairColor = ['#5a3826', '#333333', '#884422', '#cca444'][Math.floor(Math.random() * 4)];
     }
     update(dt) {
         this.time += dt;
@@ -1587,10 +1612,10 @@ class NPC {
             if (this.state === 'idle') { this.state = 'walk'; this.stateTimer = 2 + Math.random() * 3; this.targetX = this.x + (Math.random() - 0.5) * 300; this.facingRight = this.targetX > this.x; }
             else { this.state = 'idle'; this.stateTimer = 1 + Math.random() * 4; }
         }
-        if (this.state === 'walk') { 
-            const d = Math.sign(this.targetX - this.x); 
-            this.vx = d * 90; this.x += this.vx * dt; 
-            if (Math.abs(this.targetX - this.x) < 5) this.state = 'idle'; 
+        if (this.state === 'walk') {
+            const d = Math.sign(this.targetX - this.x);
+            this.vx = d * 90; this.x += this.vx * dt;
+            if (Math.abs(this.targetX - this.x) < 5) this.state = 'idle';
         } else this.vx = 0;
 
         if (this.dialogueTimer > 0) this.dialogueTimer -= dt;
@@ -1622,7 +1647,7 @@ class NPC {
         const isConv = Math.random() < 0.6;
         if (isConv) {
             const pair = topics[Math.floor(Math.random() * topics.length)];
-            this.dialogue = pair.q; this.dialogueTimer = 3; this.state = 'idle'; this.stateTimer = 3; 
+            this.dialogue = pair.q; this.dialogueTimer = 3; this.state = 'idle'; this.stateTimer = 3;
             const neighbor = this.world.npcs.find(n => n !== this && Math.abs(n.x - this.x) < 120);
             if (neighbor && neighbor.dialogueTimer <= 0 && neighbor.replyTimer <= 0) {
                 neighbor.replyContent = pair.a; neighbor.replyTimer = 1.6;
@@ -1637,7 +1662,7 @@ class NPC {
     draw(ctx, cam) {
         const sx = this.x - cam.x, sy = this.y;
         const bob = this.state === 'walk' ? Math.abs(Math.sin(this.time * 12)) * 3 : Math.sin(this.time * 2);
-        
+
         // 1. NPC Body (Flippable)
         ctx.save();
         ctx.translate(sx, sy - bob);
@@ -1681,7 +1706,7 @@ class NPC {
         // 2. Dialogue bubble (Isolated from horizontal flip scale)
         if (this.dialogueTimer > 0) {
             ctx.save();
-            ctx.translate(sx + 15, sy - bob); 
+            ctx.translate(sx + 15, sy - bob);
             ctx.font = 'bold 11px sans-serif';
             const maxWidth = 130;
             const words = this.dialogue.split(' ');
@@ -1704,14 +1729,14 @@ class NPC {
             lines.forEach(l => maxLineW = Math.max(maxLineW, ctx.measureText(l).width));
             const bw = maxLineW + 20;
             const bx = -bw / 2, by = -45 - bh;
-            
+
             // Glass bubble (Adjusted to 70% opacity / 30% transparent)
             ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
             ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 10); ctx.fill();
-            
+
             // Pointer
             ctx.beginPath(); ctx.moveTo(0, by + bh); ctx.lineTo(-5, by + bh + 8); ctx.lineTo(5, by + bh); ctx.fill();
-            
+
             ctx.fillStyle = '#111'; ctx.textAlign = 'center';
             lines.forEach((line, idx) => {
                 ctx.fillText(line, 0, by + 16 + idx * lineHt);
@@ -1728,7 +1753,7 @@ class Worker {
         this.facingRight = true; this.time = 0; this.state = 'idle';
         this.targetTree = null; this.chopTimer = 0; this.carryingLogs = 0;
         this.hairStyle = Math.random() > 0.5 ? 'spiky' : 'normal';
-        this.hairColor = ['#5a3826', '#333333', '#884422', '#cca444'][Math.floor(Math.random()*4)];
+        this.hairColor = ['#5a3826', '#333333', '#884422', '#cca444'][Math.floor(Math.random() * 4)];
         this.maxHp = 40; this.hp = 40; this.dead = false;
         this.tunicColor = '#b57b45';
         this.dialogueTimer = 0; this.dialogue = ''; this.hurtTimer = 0;
@@ -1847,20 +1872,20 @@ class Worker {
         if (this.state === 'chopping') {
             ctx.translate(20, 15);
             // Swing arc based on the 0-1.0 chopTimer
-            const swingIdx = this.chopTimer / 1.0; 
-            const swingAngle = -1.8 + Math.pow(swingIdx, 1.5) * 2.4; 
+            const swingIdx = this.chopTimer / 1.0;
+            const swingAngle = -1.8 + Math.pow(swingIdx, 1.5) * 2.4;
             ctx.rotate(swingAngle);
-            
+
             // Arm sleeve & hand
             ctx.fillStyle = this.tunicColor; ctx.fillRect(-2, -2, 7, 18);
             ctx.fillStyle = '#f1c6a3'; ctx.fillRect(-1, 15, 5, 5);
-            
+
             // Axe Handle - Made longer (approx length 35)
             ctx.fillStyle = '#654321'; ctx.fillRect(1, -25, 3, 40);
-            
+
             // Axe Head - Back blunt (now on the opposite side of blade)
             ctx.fillStyle = '#8d949c'; ctx.fillRect(-2, -13, 3, 8);
-            
+
             // Axe Head - Main flared triangular blade (Flipped to point FORWARD)
             ctx.fillStyle = '#adb2b8';
             ctx.beginPath();
@@ -1958,7 +1983,7 @@ class Soldier {
             if (this.attackTimer <= 0) {
                 const dir = Math.sign(nearestEnemy.x - this.x);
                 this.facingRight = dir > 0;
-                
+
                 // Stop moving once in comfortable strike range
                 if (nearestDist > 60) {
                     this.vx = dir * 150;
@@ -2013,7 +2038,7 @@ class Soldier {
         ctx.fillStyle = '#d8b536';
         ctx.beginPath(); ctx.moveTo(15, 21); ctx.lineTo(19, 25); ctx.lineTo(15, 29); ctx.lineTo(11, 25); ctx.closePath(); ctx.fill();
         ctx.fillStyle = '#5a4415'; ctx.fillRect(4, 39, 22, 4);
-        
+
         // --- Spear Rotation & Thrust Logic ---
         let thrustX = 0;
         let spearAngle = -1.1; // Default vertical-ish angle
@@ -2030,7 +2055,7 @@ class Soldier {
         // Pivot spear around a shoulder-height central point
         ctx.translate(15, 30);
         ctx.rotate(spearAngle);
-        
+
         // Arms (holding the spear relative to its rotation)
         // Back Arm
         ctx.fillStyle = '#244116'; ctx.fillRect(-12 + thrustX * 0.2, 0, 5, 12);
@@ -2042,15 +2067,15 @@ class Soldier {
         // Spear Shaft (long wooden pole)
         ctx.fillStyle = '#654321'; ctx.fillRect(-15 + thrustX, 10, 85, 4);
         // Spear Tip (metallic sharp point)
-        ctx.fillStyle = '#bbb'; 
-        ctx.beginPath(); 
-        ctx.moveTo(70 + thrustX, 7); 
-        ctx.lineTo(88 + thrustX, 12); 
-        ctx.lineTo(70 + thrustX, 17); 
+        ctx.fillStyle = '#bbb';
+        ctx.beginPath();
+        ctx.moveTo(70 + thrustX, 7);
+        ctx.lineTo(88 + thrustX, 12);
+        ctx.lineTo(70 + thrustX, 17);
         ctx.fill();
 
         ctx.restore();
-        
+
         ctx.fillStyle = '#f4caab'; ctx.fillRect(12, 12, 6, 5);
         ctx.beginPath(); ctx.ellipse(15, 2, 11, 12, 0, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = '#9098a2';
@@ -2108,13 +2133,13 @@ class Pike {
         if (this.dead) return;
         this.life -= dt;
         if (this.life <= 0) { this.dead = true; return; }
-        
+
         this.vy += 700 * dt; // Gravity effect for natural curve
         this.x += this.vx * dt; this.y += this.vy * dt;
         this.angle = Math.atan2(this.vy, this.vx); // Rotate to face velocity
-        
+
         if (this.y > this.world.groundY) { this.dead = true; return; }
-        
+
         // ... rest of update collision logic ...
         // Check collisions with Enemies
         for (const e of this.world.enemies) {
@@ -2174,7 +2199,7 @@ class Hunter {
         if (this.y > this.world.groundY - 60) { this.y = this.world.groundY - 60; this.vy = 0; }
         if (this.attackCd > 0) this.attackCd -= dt;
 
-        if (this.meatCount >= 3 || (this.meatCount > 0 && !this.world.animals.some(a=>!a.dead) && !this.world.groundItems.some(i=>i.type==='meat'&&!i.picked))) {
+        if (this.meatCount >= 3 || (this.meatCount > 0 && !this.world.animals.some(a => !a.dead) && !this.world.groundItems.some(i => i.type === 'meat' && !i.picked))) {
             const outX = this.world.outpost.x;
             const d = Math.abs(outX - this.x);
             if (d < 50) {
@@ -2197,25 +2222,25 @@ class Hunter {
                 let d = Math.abs(e.x - this.x);
                 if (d < bestEDist && d < 450) { bestEDist = d; targetEnemy = e; }
             }
-            
+
             let targetAnimal = null; let bestADist = Infinity;
             if (!targetEnemy) {
                 for (const a of this.world.animals) {
                     if (a.dead) continue;
                     // If we've missed this target too many times, skip it for a farther one
-                    if (this.failedAttempts >= 2 && a === this.currentTarget && this.world.animals.filter(aa=>!aa.dead).length > 1) continue; 
+                    if (this.failedAttempts >= 2 && a === this.currentTarget && this.world.animals.filter(aa => !aa.dead).length > 1) continue;
                     let d = Math.abs(a.x - this.x);
                     if (d < bestADist && d < 2000) { bestADist = d; targetAnimal = a; }
                 }
             }
-            
+
             let targetMeat = null; let bestMDist = Infinity;
             if (!targetEnemy && !targetAnimal) {
                 for (const m of this.world.groundItems) {
                     // Ignore meat near outpost so the hunter does not loop picking it back up 
-                    if (m.type === 'meat' && !m.picked && Math.abs(m.x - this.world.outpost.x) > 120) {
+                    if (m.type === 'meat' && !m.picked && Math.abs(m.x - this.world.outpost.x) > 150) {
                         let d = Math.abs(m.x - this.x);
-                        if (d < bestMDist && d < 2500) { bestMDist = d; targetMeat = m; }
+                        if (d < bestMDist && d < 3000) { bestMDist = d; targetMeat = m; }
                     }
                 }
             }
@@ -2257,7 +2282,7 @@ class Hunter {
                 }
             } else {
                 // Return to their preferred side of the outpost
-                const baseOffset = this.preferredSide * 150; 
+                const baseOffset = this.preferredSide * 150;
                 const outX = this.world.outpost.x + baseOffset;
                 const d = Math.abs(this.x - outX);
                 if (d > 30) {
@@ -2279,35 +2304,47 @@ class Hunter {
         ctx.translate(sx, sy - bob);
         if (!this.facingRight) { ctx.translate(30, 0); ctx.scale(-1, 1); }
         const ls = this.state === 'walk' ? Math.sin(this.time * 12) * 5 : 0;
-        
+
         ctx.fillStyle = '#222'; ctx.fillRect(6 - ls, 42, 7, 16); ctx.fillRect(17 + ls, 42, 7, 16);
         ctx.fillStyle = '#4c5c44'; ctx.fillRect(1, 19, 5, 17);
         ctx.fillStyle = '#f1c6a3'; ctx.fillRect(1, 34, 5, 5);
-        ctx.fillStyle = '#657b59'; 
+        ctx.fillStyle = '#657b59';
         ctx.beginPath(); ctx.moveTo(4, 16); ctx.lineTo(26, 16); ctx.lineTo(30, 40); ctx.lineTo(24, 44); ctx.lineTo(6, 44); ctx.lineTo(0, 40); ctx.closePath(); ctx.fill();
-        ctx.fillStyle = '#3a2d21'; 
+        ctx.fillStyle = '#3a2d21';
         ctx.beginPath(); ctx.moveTo(11, 17); ctx.lineTo(19, 17); ctx.lineTo(21, 41); ctx.lineTo(9, 41); ctx.closePath(); ctx.fill();
         ctx.fillStyle = '#4a3a2a'; ctx.fillRect(4, 39, 22, 4);
         ctx.fillStyle = '#6b4826'; ctx.fillRect(-4, 20, 10, 16);
         ctx.fillStyle = '#f1c6a3'; ctx.fillRect(12, 12, 6, 5);
         ctx.fillStyle = '#f4caab'; ctx.beginPath(); ctx.ellipse(15, 2, 11, 12, 0, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = '#3f4c38'; ctx.beginPath(); ctx.arc(15, 0, 12, Math.PI, 0); ctx.fill(); ctx.fillRect(3, -2, 24, 6);
-        ctx.fillStyle = '#2b1a12'; ctx.fillRect(15, -1, 3, 2); ctx.fillRect(20, 0, 2, 2); 
+        ctx.fillStyle = '#2b1a12'; ctx.fillRect(15, -1, 3, 2); ctx.fillRect(20, 0, 2, 2);
         ctx.fillStyle = '#4c5c44'; ctx.fillRect(24, 19, 5, 17);
         ctx.fillStyle = '#f1c6a3'; ctx.fillRect(24, 34, 5, 5);
 
         if (this.meatCount > 0) {
-            ctx.fillStyle = '#c8102e'; 
+            // Detailed meat/game bundle visualization
+            ctx.save();
+            ctx.translate(14, 30);
             for (let i = 0; i < this.meatCount; i++) {
-                ctx.fillRect(18 - i * 4, 25 - i * 4, 12, 8); // Offset each meat block to show count
+                ctx.save();
+                ctx.translate(-i * 3, -i * 5);
+                ctx.rotate(i * 0.2);
+                // Meat Slab
+                ctx.fillStyle = '#c8102e'; ctx.beginPath(); ctx.ellipse(0, 0, 8, 5, 0.4, 0, Math.PI * 2); ctx.fill();
+                // Fat/Rind detail
+                ctx.fillStyle = '#fff'; ctx.fillRect(-6, -3, 10, 2);
+                // Bone detail
+                ctx.fillStyle = '#ddd'; ctx.fillRect(4, -2, 6, 3);
+                ctx.restore();
             }
+            ctx.restore();
         } else if (this.pikeHideTimer <= 0) {
             ctx.fillStyle = '#654321'; ctx.fillRect(25, 10, 4, 35);
             ctx.fillStyle = '#ddd'; ctx.beginPath(); ctx.moveTo(25, 10); ctx.lineTo(29, 10); ctx.lineTo(27, -5); ctx.fill();
         }
 
         ctx.restore();
-        
+
         // Removed HUNTER label as per request
         ctx.textAlign = 'left';
         ctx.fillStyle = '#004400'; ctx.fillRect(sx - 5, sy - 18, 30, 4);
@@ -2401,14 +2438,14 @@ class Character {
                     this.hammerChargeTimer = 0;
                     this.actionTimer = 0.5; // Trigger swing animation
                     const fbX = this.x + (this.facingRight ? 40 : -40);
-                    const fbY = this.y + 10; 
+                    const fbY = this.y + 10;
                     this.world.heroProjectiles.push(new HeroFireball(this.world, fbX, fbY, this.facingRight));
                     sfx.beep(400, 'sawtooth', 0.3, 0.4); sfx.beep(100, 'square', 0.2, 0.3, 0.05);
                 }
             } else if (input.justReleased('KeyE')) {
                 // If released before 1.0s, perform a regular melee swing/interaction
                 if (this.hammerChargeTimer > 0 && this.hammerChargeTimer < 1.0) {
-                    this.world._handleE(this, true); 
+                    this.world._handleE(this, true);
                 }
                 this.hammerChargeTimer = 0;
             } else {
@@ -2463,7 +2500,7 @@ class Character {
         if (chargeRatio > 0 && this.weapon === 'hammer') {
             const t = this.time;
             const flicker = 0.7 + Math.sin(t * 30) * 0.3; // Rapid heat flicker
-            
+
             ctx.save();
             // 1. Radiant Body Aura (Additive glow)
             ctx.globalCompositeOperation = 'lighter';
@@ -2473,7 +2510,7 @@ class Character {
             auraG.addColorStop(1, 'rgba(255, 0, 0, 0)');
             ctx.fillStyle = auraG;
             ctx.beginPath(); ctx.arc(15, 20, 70, 0, Math.PI * 2); ctx.fill();
-            
+
             // 2. Spiraling Flame Licks
             ctx.fillStyle = `rgba(255, 220, 0, ${0.7 * chargeRatio * flicker})`;
             for (let i = 0; i < 5; i++) {
@@ -2483,7 +2520,7 @@ class Character {
                 const fx = 15 + Math.cos(ang) * distX, fy = 20 + Math.sin(ang) * distY;
                 ctx.beginPath();
                 ctx.moveTo(fx, fy);
-                ctx.lineTo(fx + (Math.random()-0.5)*15, fy - 15 - chargeRatio * 20);
+                ctx.lineTo(fx + (Math.random() - 0.5) * 15, fy - 15 - chargeRatio * 20);
                 ctx.lineTo(fx + 5, fy + 5);
                 ctx.fill();
             }
@@ -2493,12 +2530,12 @@ class Character {
             if (Math.random() < 0.2 + chargeRatio * 0.5) {
                 const px = this.x + (Math.random() - 0.5) * 50;
                 const py = this.y + 60 - Math.random() * 20;
-                this.world.particles.push(new Particle(px, py, '#ffaa00', (Math.random()-0.5)*30, -80 - Math.random()*120));
+                this.world.particles.push(new Particle(px, py, '#ffaa00', (Math.random() - 0.5) * 30, -80 - Math.random() * 120));
             }
 
             // 4. Horizontal Focus Bar
             const barW = 50, barH = 6;
-            const bx = 15 - barW / 2, by = 62; 
+            const bx = 15 - barW / 2, by = 62;
             ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(bx, by, barW, barH);
             const fillCol = `hsl(${20 + chargeRatio * 20}, 100%, ${50 + chargeRatio * 30}%)`;
             ctx.fillStyle = fillCol; ctx.fillRect(bx, by, barW * chargeRatio, barH);
@@ -2559,13 +2596,13 @@ class Character {
             } else if (this.weapon === 'axe') {
                 // Handle
                 ctx.fillStyle = '#654321'; ctx.fillRect(-4, 22, 4, 30);
-                
+
                 // Back blunt
                 ctx.fillStyle = '#8d949c'; ctx.fillRect(0, 38, 4, 12);
-                
+
                 // Main flared triangular double edge
                 ctx.fillStyle = '#adb2b8';
-                ctx.beginPath(); 
+                ctx.beginPath();
                 ctx.moveTo(-4, 38);      // Top inner socket
                 ctx.lineTo(-18, 30);     // Upper point
                 ctx.lineTo(-22, 44);     // Center edge
@@ -2575,7 +2612,7 @@ class Character {
 
                 // Bright edge detail
                 ctx.fillStyle = '#dde1e4';
-                ctx.beginPath(); 
+                ctx.beginPath();
                 ctx.moveTo(-17, 33);
                 ctx.lineTo(-22, 44);
                 ctx.lineTo(-16, 52);
@@ -2585,17 +2622,17 @@ class Character {
                 const t = this.world.game ? this.world.game.lastTime / 1000 : 0;
                 const chargeRatio = Math.min(1.0, this.hammerChargeTimer / 1.0);
                 const pulse = (0.8 + Math.sin(t * 8) * 0.2) + (chargeRatio * 0.6); // Intensify while charging
-                
+
                 // --- Obsidian Handle ---
                 ctx.fillStyle = '#1a1a1a'; ctx.fillRect(0, 22, 5, 40);
                 // Silver Banding
-                ctx.fillStyle = '#aaa'; 
+                ctx.fillStyle = '#aaa';
                 ctx.fillRect(0, 25, 5, 2); ctx.fillRect(0, 35, 5, 2); ctx.fillRect(0, 45, 5, 2);
-                
+
                 // --- Massive Hammer Head (Inferno Stone) ---
                 const headX = -18, headY = 55, headW = 41, headH = 24;
                 ctx.fillStyle = '#222'; ctx.fillRect(headX, headY, headW, headH);
-                
+
                 // LAVA CRACKS (Animated Pulsing)
                 ctx.strokeStyle = `rgba(255, 120, 0, ${pulse})`; ctx.lineWidth = 1.5;
                 ctx.beginPath();
@@ -2603,19 +2640,19 @@ class Character {
                 ctx.moveTo(headX + 25, headY + 3); ctx.lineTo(headX + 20, headY + 20);
                 ctx.moveTo(headX + 35, headY + 8); ctx.lineTo(headX + 30, headY + 15);
                 ctx.stroke();
-                
+
                 // PULSING CORE GLOW
-                const cg = ctx.createRadialGradient(headX + headW/2, headY + headH/2, 2, headX + headW/2, headY + headH/2, 12);
+                const cg = ctx.createRadialGradient(headX + headW / 2, headY + headH / 2, 2, headX + headW / 2, headY + headH / 2, 12);
                 cg.addColorStop(0, `rgba(255, 200, 0, ${pulse})`);
                 cg.addColorStop(0.5, `rgba(255, 100, 0, ${pulse * 0.6})`);
                 cg.addColorStop(1, 'transparent');
                 ctx.fillStyle = cg; ctx.fillRect(headX, headY, headW, headH);
-                
+
                 // Metallic Edges (Top and Bottom guards)
-                ctx.fillStyle = '#444'; 
+                ctx.fillStyle = '#444';
                 ctx.fillRect(headX, headY, headW, 4);     // Top guard
                 ctx.fillRect(headX, headY + headH - 4, headW, 4); // Bottom guard
-                
+
                 // --- LICKING FLAMES (Animated) ---
                 ctx.fillStyle = '#ffaa00';
                 for (let i = 0; i < 4; i++) {
@@ -2720,8 +2757,8 @@ class Outpost {
             // Campfire
             const t = this.world.game ? this.world.game.lastTime / 1000 : 0;
             ctx.fillStyle = '#3b2512'; ctx.fillRect(sx + 45, sy - 6, 25, 6);
-            ctx.fillStyle = '#ffaa00'; ctx.beginPath(); ctx.arc(sx + 57, sy - 6, 12 + Math.sin(t*15)*2, Math.PI, 0); ctx.fill();
-            ctx.fillStyle = '#ff4400'; ctx.beginPath(); ctx.arc(sx + 57, sy - 6, 6 + Math.sin(t*20)*2, Math.PI, 0); ctx.fill();
+            ctx.fillStyle = '#ffaa00'; ctx.beginPath(); ctx.arc(sx + 57, sy - 6, 12 + Math.sin(t * 15) * 2, Math.PI, 0); ctx.fill();
+            ctx.fillStyle = '#ff4400'; ctx.beginPath(); ctx.arc(sx + 57, sy - 6, 6 + Math.sin(t * 20) * 2, Math.PI, 0); ctx.fill();
             // Supply crates
             ctx.lineWidth = 1; ctx.strokeStyle = '#3a2211';
             ctx.fillStyle = '#8b5a2b'; ctx.fillRect(sx - 90, sy - 25, 25, 25); ctx.strokeRect(sx - 90, sy - 25, 25, 25);
@@ -2744,6 +2781,131 @@ class Outpost {
         ctx.fillStyle = 'lime'; ctx.fillRect(sx - 52, sy - 144, (this.hp / 100) * 104, 10);
         ctx.fillStyle = '#0f0'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
         ctx.fillText(`${this.level >= 2 ? 'Town' : 'Outpost'} ${Math.ceil(this.hp)}/100`, sx, sy - 147); ctx.textAlign = 'left';
+    }
+}
+
+// ─── ENEMY CAMP ───────────────────────────────────────────────────────────────
+class EnemyCamp {
+    constructor(world, x) {
+        this.world = world; this.x = x; this.y = world.groundY;
+        this.maxHp = 1000; this.hp = 1000;
+        this.dead = false; this.time = 0;
+        this.particles = [];
+    }
+    takeDamage(dmg) {
+        if (this.dead) return;
+        this.hp -= dmg; sfx.playHit();
+        if (this.hp <= 0) {
+            this.hp = 0; this.dead = true;
+            for (let i = 0; i < 40; i++) {
+                this.world.particles.push(new Particle(this.x + (Math.random() - 0.5) * 100, this.y - 40, '#1a0033'));
+            }
+        }
+    }
+    update(dt) {
+        this.time += dt;
+    }
+    draw(ctx, cam) {
+        const sx = this.x - cam.x, sy = this.y;
+        
+        // 1. Charred Ground Effect
+        const groundW = 400;
+        const grad = ctx.createRadialGradient(sx, sy, 50, sx, sy, groundW / 2);
+        grad.addColorStop(0, 'rgba(20, 10, 30, 0.7)');
+        grad.addColorStop(0.6, 'rgba(40, 40, 50, 0.4)');
+        grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(sx - groundW / 2, sy - 20, groundW, 60);
+
+        if (this.dead) {
+            // Drawn broken structures
+            ctx.fillStyle = '#111';
+            ctx.fillRect(sx - 60, sy - 10, 120, 10);
+            ctx.fillStyle = '#222';
+            ctx.fillRect(sx - 40, sy - 20, 30, 15);
+            ctx.font = 'bold 15px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillStyle = '#444'; ctx.fillText('RUINED CAMP', sx, sy - 40);
+            ctx.textAlign = 'left';
+            return;
+        }
+
+        // 2. Void Portal (Swirling effect)
+        ctx.save();
+        ctx.translate(sx, sy - 70);
+        const portalScale = 1.0 + Math.sin(this.time * 2) * 0.1;
+        ctx.scale(portalScale, portalScale);
+        for(let i=0; i<3; i++) {
+            ctx.rotate(this.time * (i + 1) * 0.5);
+            ctx.fillStyle = i === 0 ? 'rgba(155, 0, 200, 0.4)' : i === 1 ? 'rgba(50, 0, 100, 0.6)' : 'rgba(10, 0, 20, 0.8)';
+            ctx.beginPath();
+            ctx.ellipse(0, 0, 40 - i*10, 60 - i*15, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.restore();
+
+        // 3. Command Tents (Spooky)
+        ctx.fillStyle = '#0a001a';
+        // Main Tent
+        ctx.beginPath();
+        ctx.moveTo(sx - 100, sy); ctx.lineTo(sx - 10, sy - 120); ctx.lineTo(sx + 80, sy);
+        ctx.closePath(); ctx.fill();
+        // Highlights & Tattered detail
+        ctx.fillStyle = '#1a0033';
+        ctx.beginPath(); ctx.moveTo(sx - 10, sy - 120); ctx.lineTo(sx + 10, sy - 120); ctx.lineTo(sx + 20, sy - 40); ctx.lineTo(sx - 20, sy - 40); ctx.fill();
+        // Tattered Banner
+        const fl = Math.sin(this.time * 4) * 5;
+        ctx.fillStyle = '#400';
+        ctx.beginPath();
+        ctx.moveTo(sx - 10, sy - 110); ctx.lineTo(sx - 40 - fl, sy - 105); ctx.lineTo(sx - 35 - fl, sy - 85); ctx.lineTo(sx - 10, sy - 90);
+        ctx.fill();
+
+        // 4. Bone Structure (Ribs)
+        ctx.strokeStyle = '#d0d0d8'; ctx.lineWidth = 8; ctx.lineCap = 'round';
+        for (let i = -1; i <= 1; i += 2) {
+            ctx.beginPath();
+            ctx.moveTo(sx + i * 140, sy);
+            ctx.quadraticCurveTo(sx + i * 120, sy - 150, sx + i * 20, sy - 30);
+            ctx.stroke();
+            // Smaller spikes
+            ctx.beginPath();
+            ctx.moveTo(sx + i * 110, sy);
+            ctx.quadraticCurveTo(sx + i * 100, sy - 100, sx + i * 40, sy - 20);
+            ctx.stroke();
+        }
+
+        // 5. Shadow Lanterns
+        for (let i = 0; i < 2; i++) {
+            const lx = sx + (i === 0 ? -120 : 120);
+            const ly = sy - 90 + Math.sin(this.time * 3 + i) * 10;
+            const glow = ctx.createRadialGradient(lx, ly, 0, lx, ly, 20);
+            glow.addColorStop(0, 'rgba(155, 0, 200, 0.8)');
+            glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            ctx.fillStyle = glow;
+            ctx.beginPath(); ctx.arc(lx, ly, 20, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.beginPath(); ctx.arc(lx, ly, 3, 0, Math.PI * 2); ctx.fill();
+        }
+
+        // 6. HP Bar
+        const barW = 200, barH = 12;
+        const bx = sx - barW / 2, by = sy - 180;
+        ctx.fillStyle = '#200'; ctx.fillRect(bx - 2, by - 2, barW + 4, barH + 4);
+        const hpRatio = this.hp / this.maxHp;
+        const barGrad = ctx.createLinearGradient(bx, 0, bx + barW, 0);
+        barGrad.addColorStop(0, '#9b00c8'); barGrad.addColorStop(1, '#ff0055');
+        ctx.fillStyle = barGrad;
+        ctx.fillRect(bx, by, barW * hpRatio, barH);
+        // Jagged border
+        ctx.strokeStyle = '#400'; ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (let i=0; i<=barW; i+=10) {
+            ctx.lineTo(bx + i, by + (i%20===0 ? -3 : 0));
+        }
+        ctx.stroke();
+
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText(`ENEMY COMMAND CAMP ${Math.ceil(this.hp)}/1000`, sx, by - 14);
+        ctx.textAlign = 'left';
     }
 }
 
@@ -2779,28 +2941,28 @@ class Barrack {
         for (let i = -55; i < 60; i += 20) ctx.fillRect(sx + i, sy - 100, 14, 22);
         // Stone texture lines
         ctx.fillStyle = '#4c5259';
-        for(let j=0; j<4; j++) { ctx.fillRect(sx - 40, sy - 70 + j*15, 20, 2); ctx.fillRect(sx + 20, sy - 70 + j*15, 30, 2); ctx.fillRect(sx - 10, sy - 63 + j*15, 20, 2); }
+        for (let j = 0; j < 4; j++) { ctx.fillRect(sx - 40, sy - 70 + j * 15, 20, 2); ctx.fillRect(sx + 20, sy - 70 + j * 15, 30, 2); ctx.fillRect(sx - 10, sy - 63 + j * 15, 20, 2); }
         // Archway Door
         ctx.fillStyle = '#2b1a10'; ctx.fillRect(sx - 15, sy - 50, 30, 50);
         ctx.beginPath(); ctx.arc(sx, sy - 50, 15, Math.PI, 0); ctx.fill();
         ctx.fillStyle = '#111'; ctx.fillRect(sx - 10, sy - 45, 20, 45); // dark interior
-        
+
         // Weapon Rack & Shields
         ctx.fillStyle = '#4a2f1d'; ctx.fillRect(sx - 45, sy - 30, 15, 30); // rack
-        for(let i=0; i<3; i++) {
-            ctx.fillStyle = '#ccc'; ctx.fillRect(sx - 42 + i*4, sy - 35, 2, 25); // swords
-            ctx.fillStyle = '#8b4513'; ctx.fillRect(sx - 43 + i*4, sy - 15, 4, 5); // hilt
+        for (let i = 0; i < 3; i++) {
+            ctx.fillStyle = '#ccc'; ctx.fillRect(sx - 42 + i * 4, sy - 35, 2, 25); // swords
+            ctx.fillStyle = '#8b4513'; ctx.fillRect(sx - 43 + i * 4, sy - 15, 4, 5); // hilt
         }
         // Shield Stack
-        ctx.fillStyle = '#8b2222'; ctx.beginPath(); ctx.arc(sx + 40, sy - 15, 12, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle = '#cecece'; ctx.beginPath(); ctx.arc(sx + 40, sy - 15, 4, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle = '#6b1111'; ctx.beginPath(); ctx.arc(sx + 35, sy - 10, 12, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle = '#cecece'; ctx.beginPath(); ctx.arc(sx + 35, sy - 10, 4, 0, Math.PI*2); ctx.fill();
-        
+        ctx.fillStyle = '#8b2222'; ctx.beginPath(); ctx.arc(sx + 40, sy - 15, 12, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#cecece'; ctx.beginPath(); ctx.arc(sx + 40, sy - 15, 4, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#6b1111'; ctx.beginPath(); ctx.arc(sx + 35, sy - 10, 12, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#cecece'; ctx.beginPath(); ctx.arc(sx + 35, sy - 10, 4, 0, Math.PI * 2); ctx.fill();
+
         ctx.fillStyle = isTown ? '#ffd700' : '#c8a000'; ctx.fillRect(sx - 35, sy - 98, 70, 15);
         ctx.fillStyle = '#000'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center';
         ctx.fillText(isTown ? 'BARRACKS★' : 'BARRACKS', sx, sy - 87); ctx.textAlign = 'left';
-        
+
         // Main Fort Flag
         ctx.fillStyle = '#3a2b1f'; ctx.fillRect(sx + 55, sy - 130, 4, 55);
         const t = this.world.game ? this.world.game.lastTime / 1000 : 0;
@@ -2809,8 +2971,8 @@ class Barrack {
         ctx.beginPath(); ctx.moveTo(sx + 59, sy - 130); ctx.lineTo(sx + 85 + fl, sy - 125); ctx.lineTo(sx + 85 + fl, sy - 110); ctx.lineTo(sx + 59, sy - 115); ctx.fill();
         // Torch
         ctx.fillStyle = '#333'; ctx.fillRect(sx + 20, sy - 40, 5, 15);
-        ctx.fillStyle = `rgba(255, 68, 0, ${0.8 + Math.sin(t*20)*0.2})`;
-        ctx.beginPath(); ctx.arc(sx + 22.5, sy - 45, 8 + Math.sin(t*15)*2, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = `rgba(255, 68, 0, ${0.8 + Math.sin(t * 20) * 0.2})`;
+        ctx.beginPath(); ctx.arc(sx + 22.5, sy - 45, 8 + Math.sin(t * 15) * 2, 0, Math.PI * 2); ctx.fill();
         // Hire menu
         if (Math.abs(this.x - player.x) < 80) {
             if (isTown) {
@@ -2831,7 +2993,7 @@ class Barrack {
         const hpRatio = this.hp / this.maxHp;
         ctx.fillStyle = hpRatio > 0.5 ? '#0c0' : hpRatio > 0.25 ? '#f5a623' : '#e00';
         ctx.fillRect(sx - 40, sy - 110, hpRatio * 80, 5);
-        
+
         ctx.restore();
     }
 }
@@ -2843,15 +3005,15 @@ class Animal {
         this.type = type; // 'rabbit' or 'deer'
         this.vx = 0; this.vy = 0; this.facingRight = Math.random() > 0.5;
         this.time = Math.random() * 10;
-        this.hp = type === 'deer' ? 20 : 10;
+        this.hp = type === 'deer' ? 35 : 10;
         this.maxHp = this.hp;
         this.dead = false; this.state = 'idle'; this.stateTimer = 0;
         this.speed = type === 'deer' ? 90 : 120;
     }
     takeDamage(dmg) {
         this.hp -= dmg; triggerHitGlow(this);
-        if (this.hp <= 0 && !this.dead) { 
-            this.dead = true; 
+        if (this.hp <= 0 && !this.dead) {
+            this.dead = true;
             const meatCount = this.type === 'deer' ? 2 : 1;
             for (let i = 0; i < meatCount; i++) {
                 this.world.groundItems.push(new GroundItem(this.world, this.x + (Math.random() - 0.5) * 20, this.world.groundY - 20, 'meat'));
@@ -2869,7 +3031,7 @@ class Animal {
         if (this.dead) return;
         this.time += dt;
         this.stateTimer -= dt;
-        
+
         if (this.stateTimer <= 0) {
             if (this.state === 'idle' || this.state === 'eating') {
                 const r = Math.random();
@@ -2889,7 +3051,7 @@ class Animal {
                 this.vx = 0;
             }
         }
-        
+
         this.x += this.vx * dt;
         if (this.x < -1800) this.x = -1800;
         if (this.x > 5000) this.x = 5000;
@@ -2900,13 +3062,13 @@ class Animal {
         ctx.fillStyle = color;
         // Joint 1: Thigh
         ctx.rotate(angle * 0.4);
-        ctx.beginPath(); ctx.roundRect(-width/2, 0, width, 14, width/2); ctx.fill();
+        ctx.beginPath(); ctx.roundRect(-width / 2, 0, width, 14, width / 2); ctx.fill();
         // Joint 2: Shin
         ctx.translate(0, 14);
         ctx.rotate(-angle * 0.6);
-        ctx.beginPath(); ctx.roundRect(-width/2, 0, width, 14, width/2); ctx.fill();
+        ctx.beginPath(); ctx.roundRect(-width / 2, 0, width, 14, width / 2); ctx.fill();
         // Hoof
-        ctx.fillStyle = '#222'; ctx.fillRect(-width/2, 11, width+1, 4);
+        ctx.fillStyle = '#222'; ctx.fillRect(-width / 2, 11, width + 1, 4);
         ctx.restore();
     }
     draw(ctx, cam) {
@@ -2921,11 +3083,11 @@ class Animal {
         ctx.translate(sx, sy - bob - yOffset);
 
         if (!this.facingRight) ctx.scale(-1, 1);
-        
+
         if (this.type === 'rabbit') {
             ctx.fillStyle = '#f0f0f0';
-            ctx.beginPath(); ctx.ellipse(0, -6, 8, 6, 0, 0, Math.PI*2); ctx.fill(); // body
-            ctx.beginPath(); ctx.ellipse(6, -10, 5, 5, 0, 0, Math.PI*2); ctx.fill(); // head
+            ctx.beginPath(); ctx.ellipse(0, -6, 8, 6, 0, 0, Math.PI * 2); ctx.fill(); // body
+            ctx.beginPath(); ctx.ellipse(6, -10, 5, 5, 0, 0, Math.PI * 2); ctx.fill(); // head
             ctx.fillStyle = '#e8caca';
             ctx.fillRect(5, -18, 2, 8); ctx.fillRect(1, -19, 2, 8); // ears
             ctx.fillStyle = '#111'; ctx.fillRect(6, -11, 2, 2); // eye
@@ -2933,7 +3095,7 @@ class Animal {
             const color = '#8b5a2b';
             const antlerColor = '#d4b798';
             const walk = (this.state === 'walk' || this.state === 'run') ? Math.sin(this.time * 12) : 0;
-            
+
             // Back Legs
             this._drawLeg(ctx, -12, -4, walk, 3, color);
             this._drawLeg(ctx, -4, -4, -walk, 3, color);
@@ -2951,7 +3113,7 @@ class Animal {
             ctx.fillStyle = '#d4b798';
             ctx.save();
             ctx.translate(-18, -2);
-            ctx.rotate(Math.sin(this.time * 5) * 0.2); 
+            ctx.rotate(Math.sin(this.time * 5) * 0.2);
             ctx.beginPath(); ctx.ellipse(-2, 0, 4, 2.5, -0.2, 0, Math.PI * 2); ctx.fill();
             ctx.restore();
 
@@ -2961,9 +3123,9 @@ class Animal {
             // Lower neck if eating, else subtle sway
             const isEating = this.state === 'eating';
             const neckRot = isEating ? 1.0 + Math.sin(this.time * 20) * 0.03 : Math.sin(this.time * 2) * 0.05;
-            ctx.rotate(neckRot); 
+            ctx.rotate(neckRot);
             ctx.beginPath(); // Neck curve
-            ctx.moveTo(0,0); ctx.quadraticCurveTo(4, -12, 10, -17);
+            ctx.moveTo(0, 0); ctx.quadraticCurveTo(4, -12, 10, -17);
             ctx.lineTo(2, -23); ctx.quadraticCurveTo(-4, -12, -6, 4);
             ctx.fill();
 
@@ -2978,7 +3140,7 @@ class Animal {
                 const side = i === 0 ? 1 : -1;
                 ctx.save(); ctx.translate(-2, -3);
                 ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(side * 4, -13);
-                for (let p=0; p < 4; p++) {
+                for (let p = 0; p < 4; p++) {
                     ctx.moveTo(side * (1 + p), -4 - p * 2.5);
                     ctx.lineTo(side * (6 + p * 1.5), -7 - p * 4);
                 }
@@ -3026,7 +3188,7 @@ class World {
         this.sellShop = new Shop(this, 750, 'sell');
         this.refugeShop = new Shop(this, 1450, 'refuge');
         this.hammerShop = new Shop(this, 1600, 'hammer');
-        
+
         this.decorations = [];
         for (let i = 0; i < 80; i++) {
             const types = ['grass', 'flower'];
@@ -3037,11 +3199,14 @@ class World {
             }
         }
         this.outpost = new Outpost(this, 1150);
+        this.enemyCamp = new EnemyCamp(this, 5000); // New Target
         this.barracks = [new Barrack(this, 950)];
         this.farms = [];
         this.soldiers = [];
         this.archers = [];
         this.birds = [];
+        
+
         // Spawn birds on random trees (1-4 birds per tree)
         for (let i = 0; i < 6; i++) {
             const tree = this.foregroundTrees[Math.floor(Math.random() * this.foregroundTrees.length)];
@@ -3065,6 +3230,10 @@ class World {
         this.heroProjectiles = [];
         this.woodBlocks = [];
         this.enemies = [];
+        // --- Spawn Camp Guards ---
+        for (let i = 0; i < 3; i++) this.enemies.push(new Enemy(this, 4800 + i * 40, 5000));
+        for (let i = 0; i < 2; i++) this.enemies.push(new EnemyArcher(this, 4900 + i * 40, 5000));
+
         this.animals = [];
         for (let i = 0; i < 4; i++) {
             const ax = 1500 + Math.random() * 2000;
@@ -3160,12 +3329,12 @@ class World {
                 this._handleR(player);
             }
         }
-        
+
         // Sell Meat Single (Y)
         if (input.justPressed('KeyY')) {
             if (distToSell < 60) {
                 if (player.inventory.meat >= 1) {
-                    player.inventory.meat -= 1; player.inventory.gold += 3; sfx.playCoin(); 
+                    player.inventory.meat -= 1; player.inventory.gold += 3; sfx.playCoin();
                     this.particles.push(new Particle(this.sellShop.x, this.sellShop.y - 40, '#ffd700'));
                 }
             }
@@ -3178,7 +3347,7 @@ class World {
                 this.yHoldTimer = 0;
                 let sold = false;
                 if (player.inventory.meat > 0) { player.inventory.gold += player.inventory.meat * 3; player.inventory.meat = 0; sold = true; }
-                if (sold) { sfx.playCoin(); for (let i=0; i<15; i++) this.particles.push(new Particle(this.sellShop.x, this.sellShop.y-40, '#ffd700')); }
+                if (sold) { sfx.playCoin(); for (let i = 0; i < 15; i++) this.particles.push(new Particle(this.sellShop.x, this.sellShop.y - 40, '#ffd700')); }
             }
         } else {
             this.yHoldTimer = 0;
@@ -3188,7 +3357,7 @@ class World {
         if (Math.abs(this.refugeShop.x - player.x) < 60) this.hiringRefuge = true;
         else this.hiringRefuge = false;
 
-        if (input.justPressed('Digit1')) { 
+        if (input.justPressed('Digit1')) {
             if (this.hiringBarrack) this._hireFromMenu(player, 'soldier');
             else if (this.hiringRefuge) {
                 const cost = this.outpost.level >= 2 ? 5 : 2;
@@ -3286,12 +3455,15 @@ class World {
             this.animals.push(new Animal(this, ax, Math.random() > 0.5 ? 'deer' : 'rabbit'));
         }
 
+        // Enemy Camp Update
+        this.enemyCamp.update(dt);
+
         // Ladybugs
         this.ladybugs.forEach(l => l.update(dt));
-        
+
         // Dynamic Decorations (Flowers & Grass)
         this.decorations.forEach(d => d.update(dt));
- 
+
         // Clear hiring menu if player walks away
         if (this.hiringBarrack && Math.abs(this.hiringBarrack.x - player.x) > 100) this.hiringBarrack = null;
         this.groundItems.forEach(i => i.update(dt));
@@ -3375,18 +3547,14 @@ class World {
     _spawnWave() {
         this.waveNumber++;
         const count = 4 + this.waveNumber * 2;
+        const spawnX = this.enemyCamp.dead ? 4000 : this.enemyCamp.x - 100;
         for (let i = 0; i < count; i++) {
             if (this.waveNumber >= 6 && Math.random() < 0.3) {
-                this.enemies.push(new EnemyArcher(this, 4000 + Math.random() * 500 + i * 120));
+                this.enemies.push(new EnemyArcher(this, spawnX + Math.random() * 500 + i * 120));
             } else {
-                this.enemies.push(new Enemy(this, 4000 + Math.random() * 500 + i * 120));
+                this.enemies.push(new Enemy(this, spawnX + Math.random() * 500 + i * 120));
             }
         }
-        /* 
-        if (this.waveNumber >= 1) {
-            this.enemies.push(new EnemyDragon(this, 4500 + Math.random() * 500));
-        }
-        */
     }
     _handleE(player, forceHammer = false) {
         // Repair outpost
@@ -3426,7 +3594,7 @@ class World {
 
         const swingTime = player.weapon === 'sword' ? 0.35 : player.weapon === 'fists' ? 0.3 : 0.5;
         player.actionTimer = swingTime;
-        
+
         // (Hammer Fireball now handled in Character.update via charging)
 
         let hit = false;
@@ -3440,6 +3608,10 @@ class World {
                     hit = true; break;
                 }
             }
+        }
+        if (!hit && !this.enemyCamp.dead && Math.abs(this.enemyCamp.x - player.x) < 150) {
+            this.enemyCamp.takeDamage(player.weaponDmg);
+            hit = true;
         }
         if (!hit) {
             for (const animal of this.animals) {
@@ -3598,6 +3770,8 @@ class World {
         ctx.beginPath();
         this.outpost.draw(ctx, cam);
         ctx.beginPath();
+        this.enemyCamp.draw(ctx, cam);
+        ctx.beginPath();
         this.foregroundTrees.forEach(t => t.draw(ctx, cam));
         ctx.beginPath();
         this.npcs.forEach(n => n.draw(ctx, cam));
@@ -3621,7 +3795,7 @@ class World {
 
         // Hold E/R/Y Progress Bars
         if (this.eHoldTimer > 0 || this.rHoldTimer > 0 || this.yHoldTimer > 0) {
-            let timer = 0; if(this.eHoldTimer>0) timer = this.eHoldTimer; else if(this.rHoldTimer>0) timer = this.rHoldTimer; else timer = this.yHoldTimer;
+            let timer = 0; if (this.eHoldTimer > 0) timer = this.eHoldTimer; else if (this.rHoldTimer > 0) timer = this.rHoldTimer; else timer = this.yHoldTimer;
             const sx = this.sellShop.x - cam.x, sy = this.sellShop.y - 145;
             ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(sx, sy, 18, 0, Math.PI * 2); ctx.stroke();
             ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(sx, sy, 18, -Math.PI / 2, -Math.PI / 2 + (timer / 2.0) * Math.PI * 2); ctx.stroke();
@@ -3704,7 +3878,9 @@ class Game {
                 soldiers: this.world.soldiers.filter(s => !s.dead).map(s => ({ x: s.x, hp: s.hp, guardX: s.guardX, following: s.following })),
                 archers: this.world.archers.filter(a => !a.dead).map(a => ({ x: a.x, hp: a.hp, guardX: a.guardX, following: a.following })),
                 workers: this.world.workers.filter(w => !w.dead).map(w => ({ x: w.x, hp: w.hp, carryingLogs: w.carryingLogs })),
-                woodBlocks: this.world.woodBlocks.filter(b => !b.dead).map(b => ({ x: b.x, hp: b.hp }))
+                woodBlocks: this.world.woodBlocks.filter(b => !b.dead).map(b => ({ x: b.x, hp: b.hp })),
+                enemyCampHp: this.world.enemyCamp.hp,
+                enemyCampDead: this.world.enemyCamp.dead
             }
         };
         localStorage.setItem('kingdom_save', JSON.stringify(data));
@@ -3735,6 +3911,11 @@ class Game {
             w.workers = (wd.workers || []).map(work => { const worker = new Worker(w, work.x); worker.hp = work.hp; worker.carryingLogs = work.carryingLogs; return worker; });
             // Wood blocks
             w.woodBlocks = (wd.woodBlocks || []).map(b => { const bl = new WoodBlock(w, b.x); bl.hp = b.hp; return bl; });
+            // Enemy Camp
+            if (wd.enemyCampHp !== undefined) {
+                w.enemyCamp.hp = wd.enemyCampHp;
+                w.enemyCamp.dead = wd.enemyCampDead;
+            }
             return true;
         } catch (e) { console.error('Load failed', e); return false; }
     }
@@ -3856,8 +4037,8 @@ class Game {
         // Title text with glow
         const titleY = H * 0.28 + Math.sin(t * 0.8) * 6;
         ctx.shadowColor = '#c8a000'; ctx.shadowBlur = 30;
-        ctx.textAlign = 'center'; 
-        
+        ctx.textAlign = 'center';
+
         // "Pocket" (Smaller - Ruby Red)
         ctx.fillStyle = '#e0115f'; ctx.font = `italic ${Math.round(W * 0.045)}px serif`;
         ctx.textBaseline = 'alphabetic';
@@ -3865,9 +4046,9 @@ class Game {
 
         // "Kingdom" (Medium-Large - Golden)
         ctx.fillStyle = '#ffd700'; ctx.font = `bold ${Math.round(W * 0.08)}px serif`;
-        ctx.textBaseline = 'top'; 
+        ctx.textBaseline = 'top';
         ctx.fillText('KINGDOM', W / 2, titleY + 5);
-        
+
         ctx.shadowBlur = 0;
         ctx.textBaseline = 'alphabetic';
         ctx.fillStyle = '#c8c8c8'; ctx.font = `${Math.round(W * 0.022)}px sans-serif`;
@@ -3877,7 +4058,7 @@ class Game {
         const btnW = 240, btnH = 52, btnX = W / 2 - btnW / 2;
         const topY = H * 0.56;
         const botY = topY + 70;
-        
+
         let newGameY, continueY;
         if (this.hasSave) {
             continueY = topY;
@@ -4048,4 +4229,8 @@ class Game {
     }
 }
 
-window.addEventListener('load', () => { if (document.getElementById('gameCanvas') && document.getElementById('gameCanvas').style.display !== 'none') new Game('gameCanvas'); });
+window.addEventListener('load', () => { 
+    if (document.getElementById('gameCanvas') && document.getElementById('gameCanvas').style.display !== 'none') {
+        window.game = new Game('gameCanvas'); 
+    }
+});
