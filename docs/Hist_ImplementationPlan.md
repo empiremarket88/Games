@@ -45,3 +45,13 @@ Refine the mobile interface ergonomics based on usability feedback.
 - **Movement Fix**: Increased the gap and adjusted the alignment of the D-Pad movement buttons for better thumb separation.
 
 ---
+
+## 2026-04-16 15:54 - Sell All Animation Restoration
+Restore visual feedback for the contextual "Hold to Sell All" action.
+
+### Proposed Changes
+- **World.draw()**: Re-implemented the circular progress bar over the Resource Shop.
+- **Variable Mapping**: Connected the animation logic to the new `digit1Hold`, `digit2Hold`, and `digit3Hold` variables.
+- **Clamping**: Ensured the animation handles the "trigger lock" state (-999) correctly by clamping displayed progress.
+
+---

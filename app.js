@@ -3827,9 +3827,13 @@ class World {
         this.particles.forEach(p => p.draw(ctx, cam));
         ctx.beginPath();
 
-        // Hold E/R/Y Progress Bars
-        if (this.eHoldTimer > 0 || this.rHoldTimer > 0 || this.yHoldTimer > 0) {
-            let timer = 0; if (this.eHoldTimer > 0) timer = this.eHoldTimer; else if (this.rHoldTimer > 0) timer = this.rHoldTimer; else timer = this.yHoldTimer;
+        // Hold 1/2/3 Progress Bars (Sell All animation)
+        const d1 = this.digit1Hold, d2 = this.digit2Hold, d3 = this.digit3Hold;
+        const activeTimer = Math.max(d1, d2, d3);
+        const distToSell = Math.abs(this.sellShop.x - this.game.player.x);
+
+        if (activeTimer > 0 && distToSell < 60) {
+            const timer = Math.min(2.0, activeTimer);
             const sx = this.sellShop.x - cam.x, sy = this.sellShop.y - 145;
             ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(sx, sy, 18, 0, Math.PI * 2); ctx.stroke();
             ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(sx, sy, 18, -Math.PI / 2, -Math.PI / 2 + (timer / 2.0) * Math.PI * 2); ctx.stroke();

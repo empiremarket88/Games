@@ -34,3 +34,10 @@ Refined the mobile touch interface for better ergonomics and visibility.
 - **Result**: Cleaner game screen with less obstruction and a more natural thumb position for movement and contextual actions.
 
 ---
+
+## 2026-04-16 15:54 - Sell All Animation Restoration
+Restored the circular "loading cycle" feedback for resource selling.
+- **Key Features**: Visual progress bar over the Resource Shop when keys 1, 2, or 3 are held.
+- **Result**: Immediate visual confirmation for the "Sell All" action, restoring the intuitive feel of the bulk-selling mechanic.
+
+---
