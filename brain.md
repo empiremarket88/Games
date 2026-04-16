@@ -103,6 +103,23 @@ One of the key technical achievements was the 1:1 graphics preview tool.
 - **Constructor Initialization Order (Silent Crash Bug)**: When a constructor references `this.X` before `this.X` is assigned, JavaScript throws a `TypeError: Cannot read properties of undefined`. This crash is *silent* to the user — UI buttons appear unresponsive because the function that should run on click (`_initGame`) crashes internally before completing. **Rule**: Never reference `this.entity.property` inside a constructor before that entity is created. Use the known hardcoded value (e.g., `1150` for outpost X) or restructure the initialization order.
 - **Duplicate Class Method Bug**: Defining the same method twice inside a JS class body (e.g., `_toGameOver()`) silently overwrites the earlier definition. Worse, depending on placement, it can corrupt the class prototype and cause seemingly unrelated methods to fail. **Rule**: Always search for duplicate method names (`Select-String '_methodName' app.js`) when debugging unexpected class behavior.
 
+## 📱 Mobile Architecture (v2.0 - Mobility Update)
+
+### 1. Input Virtualization (Touch-to-Key Bridge)
+To support mobile controls without rewriting game logic, a "Virtual Input" layer was implemented.
+- **Key Bridge**: The `Input` class was extended with `externalKeys{}` and a `setKey(code, state)` method.
+- **Simulated Triggers**: Mobile buttons use `touchstart/touchend` to trigger `setKey`, which updates the same state used by the `KeyboardEvent` listeners.
+- **Benefit**: This allows the game's movement and building logic to remain platform-agnostic.
+
+### 2. Gesture-Locked APIs (Fullscreen & Audio)
+Modern mobile browsers (like Chrome) block `AudioContext` and `requestFullscreen` until a user gesture occurs.
+- **Bootstrapper Pattern**: A "Start Game" overlay (modal) provides the necessary gesture. Clicking "Enter Kingdom" simultaneously initializes the `SoundFX` context and enters the `Fullscreen` API.
+- **Orientation Lock**: CSS media queries (`orientation: portrait`) are used to display rotation hints, as programmatic orientation locking is inconsistent across mobile browsers.
+
+### 3. Responsive Scaling & UI
+- **Viewport Fit**: Using `viewport-fit=cover` in the meta tag ensures the game fills the screen on devices with notches (Safe Areas).
+- **Glassmorphic Controls**: UI buttons use `backdrop-filter: blur()` and semi-transparent backgrounds to maintain visibility of the game world while providing large hit-boxes for thumbs.
+
 ## 🏰 Enemy Infrastructure & AI
 
 ### 1. Enemy Command Camp (Objective-Based Design)
@@ -112,19 +129,14 @@ The enemy camp at `x=5000` serves as both a narrative waypoint and a mechanical 
 - **Wave Anchoring**: Dynamically calculates `spawnX` based on the camp's health. If the camp is alive, enemies originate from the portal; if destroyed, they spawn from the world edge (`4000`).
 
 ### 2. Guard AI (Stationary Defense Pattern)
-Implemented a "Return-to-Post" behavior for enemy units.
+Implemented a "Return-to-Post" behavior for enemy units to prevent kiting exploits.
 - **Property-Driven AI**: The `guardX` property allows a generic `Enemy` to behave as a defender.
 - **Logic**: If no player/soldier is within `bestDist`, the unit checks its current `x` against `guardX`. If the distance is > 40px, it walks back at 70% speed.
-- **Benefit**: This prevents the "Kiting Bug" where a player could lure every enemy on the map to one side. Guards will stay tethered to their objective (like the Command Camp).
+- **Benefit**: This prevents the "Kiting Bug" where a player could lure every enemy on the map to one side. Guards will stay tethered to their objective.
 
+---
 
-## 🏹 Recent Features (v1.9 - Fauna & Frontiers)
-- **Hunter Unit Integration**:
-  - Specialized AI for ranged pike combat and autonomous meat gathering.
-  - "Hauled Items" visual system that dynamically renders bundles based on inventory count.
-- **Commodity Economy**:
-  - Introduction of Meat as a high-value survival resource (3G base price).
-  - Merchant interaction expansion: Support for individual [Tap] and bulk [Hold] sales using the `KeyY` binding.
-- **Project Roadmap**: Established a centralized roadmap in `/docs/plan.md` to track project evolution across multiple versions.
-
-## ⚔️ Recent Features (v1.8 - Inferno Upgrade)
+## 🛠 Project Roadmap & Versioning
+- **v1.8**: Inferno Upgrade (Flame Hammer, Dialogue Polish).
+- **v1.9**: Fauna & Frontiers (Hunter Unit, Meat Economy, Enemy Base Camp).
+- **v2.0**: Mobility Update (Full Mobile Support, Touch Controls, Fullscreen API).
