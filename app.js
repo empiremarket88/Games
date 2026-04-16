@@ -3161,7 +3161,7 @@ class Animal {
 class World {
     constructor(game) {
         this.game = game;
-        this.groundY = game.canvas.height - 150;
+        this.groundY = game.canvas.height - 80;
         // Background trees
         this.trees = [];
         for (let i = -10; i < 60; i++) this.trees.push({ x: i * 200 + Math.random() * 100, type: Math.random() > 0.5 ? 1 : 2, height: 150 + Math.random() * 100, z: Math.random() });
@@ -3263,7 +3263,7 @@ class World {
     }
     update(dt, input) {
         this.time += dt;
-        this.groundY = this.game.canvas.height - 150;
+        this.groundY = this.game.canvas.height - 80;
         const player = this.game.player;
         // Keybinds
         if (input.justPressed('KeyB')) this._buildWoodBlock(player);
