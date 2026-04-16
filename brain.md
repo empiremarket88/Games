@@ -135,6 +135,13 @@ Implemented a "Return-to-Post" behavior for enemy units to prevent kiting exploi
 - **Logic**: If no target is within the 450px aggro range, the unit checks its current `x` against `guardX`. If the distance is > 40px, it walks back to its post at 70% speed.
 - **Benefit**: This creates distinct "Boss Mini-Zones" and prevents the game from becoming a global chase. Guards will stay tethered to their objective.
 
+### 4. Stretchable Graphics (Vertical Realignment)
+Handled the challenge of responsive resizing in a ground-based coordinate system.
+- **Problem**: When the browser window is resized, `groundY` changes. Static objects (buildings/trees) normally stay at their original Y, causing them to float or disappear.
+- **Solution**: Implemented a `lastGroundY` tracking system in the `World` update loop.
+- **Realignment Hook**: If `groundY` changes, the engine triggers `_realignVerticalContent(dy)`. This method iterates through every active array (Units, Buildings, Trees, Items) and applies the vertical delta (`dy`) to their `y` coordinate.
+- **Benefit**: This allows the game to be played fluently while stretching the window or switching between mobile device orientations without any visual glitches.
+
 ---
 
 ## 🛠 Project Roadmap & Versioning

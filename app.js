@@ -3177,6 +3177,7 @@ class World {
     constructor(game) {
         this.game = game;
         this.groundY = game.canvas.height - 80;
+        this.lastGroundY = this.groundY;
         // Background trees
         this.trees = [];
         for (let i = -10; i < 60; i++) this.trees.push({ x: i * 200 + Math.random() * 100, type: Math.random() > 0.5 ? 1 : 2, height: 150 + Math.random() * 100, z: Math.random() });
@@ -3279,6 +3280,14 @@ class World {
     update(dt, input) {
         this.time += dt;
         this.groundY = this.game.canvas.height - 80;
+        
+        // --- Vertical Realignment (Stretchable Graphics Support) ---
+        if (this.groundY !== this.lastGroundY) {
+            const dy = this.groundY - this.lastGroundY;
+            this._realignVerticalContent(dy);
+            this.lastGroundY = this.groundY;
+        }
+
         const player = this.game.player;
         // Keybinds
         if (input.justPressed('KeyB')) this._buildWoodBlock(player);
@@ -3485,6 +3494,18 @@ class World {
         this.groundItems = this.groundItems.filter(i => !i.picked);
         this.particles.forEach(p => p.update(dt));
         this.particles = this.particles.filter(p => p.life > 0);
+    }
+    _realignVerticalContent(dy) {
+        this.game.player.y += dy;
+        const objects = [
+            this.outpost, this.enemyCamp, this.axeShop, this.sellShop, this.refugeShop, this.hammerShop,
+            ...this.barracks, ...this.farms, ...this.soldiers, ...this.archers, ...this.workers, ...this.hunters,
+            ...this.enemies, ...this.animals, ...this.npcs, ...this.decorations, ...this.foregroundTrees,
+            ...this.birds, ...this.ladybugs, ...this.groundItems, ...this.particles, ...this.arrows
+        ];
+        for (const obj of objects) {
+            if (obj && obj.y !== undefined) obj.y += dy;
+        }
     }
     _buildWoodBlock(p) {
         if (p.inventory.wood < 30) return;
