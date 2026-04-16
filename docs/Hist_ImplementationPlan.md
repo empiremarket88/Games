@@ -55,3 +55,66 @@ Restore visual feedback for the contextual "Hold to Sell All" action.
 - **Clamping**: Ensured the animation handles the "trigger lock" state (-999) correctly by clamping displayed progress.
 
 ---
+
+## 2026-04-16 23:27 - Refugee Shop Interaction Fix
+Restore the ability to hire workers and hunters from the Refugee Shop using contextual number keys.
+
+### Proposed Changes
+- **World.constructor**: Added `hiringRefuge` state variable initialization.
+- **World.update**: Implemented a 60px proximity check for the `refugeShop` and assigned it to `hiringRefuge`.
+- **Logic Mapping**: Re-enabled the `Digit1` (Worker) and `Digit2` (Hunter) triggers when standing near the refuge camp.
+
+---
+
+## 2026-04-16 23:38 - Wood Wall Cost Label Sync
+Update HUD and documentation to reflect the actual resource requirement for the Wood Wall.
+
+### Proposed Changes
+- **HUD (app.js)**: Changed "B Wall(30G)" to "B Wall(30 Wood)" in the bottom controls bar.
+- **Documentation**: Sync the info comment at the top of the file and corrected the Barrack cost label.
+
+---
+
+## 2026-04-16 23:45 - Enemy Spawn Grounding & ESC Button
+Improve immersion by refining enemy portal behavior and enhancing mobile accessibility.
+
+### Proposed Changes
+- **Enemy Spawning**: 
+    - Updated `Enemy` and `EnemyArcher` constructors to initialize at `world.groundY - 60` (ground level).
+    - Adjusted `_spawnWave` to center spawn packets at the camp portal (`this.enemyCamp.x`) instead of the sky.
+- **Mobile UI**:
+    - **mobile.html**: Added a virtual "ESC" button to the top utility bar.
+    - **mobile.css**: Updated `#top-bar` to a flex-layout and added circular styling for the ESC button.
+
+---
+
+## 2026-04-16 23:55 - Enemy Camp Buff & Retaliation
+Increase the difficulty of the Enemy Camp and add defensive reinforcements.
+
+### Proposed Changes
+- **HP Buff**: Increased camp HP from 1,000 to 5,000.
+- **Retaliation**: Added `hitCounter` and randomized `hitsToSpawn` (3-5) to trigger 2x Minion + 1x Archer waves.
+- **Label Fix**: Corrected hardcoded HP label to use `this.maxHp`.
+- **Sentinel Exclusion**: Stationary camp guards no longer keep the Blood Moon active.
+
+---
+
+## 2026-04-17 00:15 - Town Alarm & Defense AI
+Implement a player-triggered evacuation system and expand enemy targeting to buildings.
+
+### Proposed Changes
+- **Alarm Bell**: Press [2] near Town Hall for rhythmic alarm and swinging bell animation.
+- **Shelter Behavior**: Workers/Hunters retreat to a safe zone on alarm.
+- **Building Attacks**: Enemies target Farms/Barracks/Archers. Updated Arrow hitboxes for structures.
+- **Town Buff**: Level 2 Outpost max HP set to 500.
+
+---
+
+## 2026-04-17 00:45 - UI/UX Polish & Save Fixes
+Standardize visual feedback and resolve load-game state issues.
+
+### Proposed Changes
+- **HP Bar Standardization**: Friendly buildings (60px), Enemy Camp (120px).
+- **HUD Layout**: Moved X/Y coordinates down to avoid mobile button overlap.
+- **Save Fix**: Explicitly restore Outpost `maxHp` based on level during load sequence.
+- **Alarm SFX**: Refined triple-beep "ding ding ding" rhythm.

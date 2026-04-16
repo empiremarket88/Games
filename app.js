@@ -1,7 +1,7 @@
 // ─── INFO ─────────────────────────────────────────────────────────────────────
 //  KINGDOM DEMAKE  —  Complete Game
 //  Controls: A/D Move │ Ctrl Sprint │ E Interact/Attack │ R Toggle Follow/Guard
-//            B Wood Wall(30G) │ V Build Barrack(300G) │ F Build Farm(100G)
+//            B Wood Wall(30 Wood) │ V Build Barrack(100G) │ F Build Farm(100G)
 //            U Upgrade nearest Farm(150G) │ H Heal soldier with wheat
 //  Goal: Protect your outpost. Survive the night waves. Upgrade to a Town!
 // ══════════════════════════════════════════════════════════════════════════════
@@ -563,10 +563,11 @@ class Arrow {
         this.y += this.vy * dt;
         this.vy += 60 * dt; // gentle gravity arc
         if (this.isEnemy) {
-            const targets = [this.world.game.player, ...this.world.soldiers, ...this.world.workers, ...this.world.archers, ...this.world.hunters, this.world.outpost];
+            const targets = [this.world.game.player, ...this.world.soldiers, ...this.world.workers, ...this.world.archers, ...this.world.hunters, this.world.outpost, ...this.world.farms, ...this.world.barracks];
             for (const t of targets) {
-                if (!t || t.dead) continue;
-                if (Math.abs(t.x - this.x) < 30 && (t === this.world.outpost || Math.abs(t.y - this.y) < 50)) {
+                const isBuilding = t === this.world.outpost || this.world.farms.includes(t) || this.world.barracks.includes(t);
+                const hitXThreshold = isBuilding ? 60 : 30;
+                if (Math.abs(t.x - this.x) < hitXThreshold && (isBuilding || Math.abs(t.y - this.y) < 50)) {
                     t.takeDamage(15);
                     this.dead = true; return;
                 }
@@ -1014,7 +1015,7 @@ class ForegroundTree {
 // ─── ENEMY ────────────────────────────────────────────────────────────────────
 class Enemy {
     constructor(world, x, guardX = null) {
-        this.world = world; this.x = x; this.y = 0;
+        this.world = world; this.x = x; this.y = world.groundY - 60;
         this.vx = 0; this.vy = 0; this.facingRight = false;
         this.time = 0; this.maxHp = 60; this.hp = 60;
         this.speed = 80; this.dead = false; this.attackCd = 0; this.hurtTimer = 0;
@@ -1065,6 +1066,24 @@ class Enemy {
                 const d = Math.abs(this.x - b.x);
                 if (d < bestDist) { bestDist = d; best = { x: b.x, entity: b, type: 'block' }; }
             }
+        }
+        // Check archers (missing in original targeting)
+        for (const a of this.world.archers) {
+            if (a.dead) continue;
+            const d = Math.abs(this.x - a.x);
+            if (d < bestDist) { bestDist = d; best = { x: a.x, entity: a, type: 'archer' }; }
+        }
+        // Check farms
+        for (const f of this.world.farms) {
+            if (f.dead) continue;
+            const d = Math.abs(this.x - f.x);
+            if (d < bestDist) { bestDist = d; best = { x: f.x, entity: f, type: 'farm' }; }
+        }
+        // Check barracks
+        for (const b of this.world.barracks) {
+            if (b.dead) continue;
+            const d = Math.abs(this.x - b.x);
+            if (d < bestDist) { bestDist = d; best = { x: b.x, entity: b, type: 'barrack' }; }
         }
         if (this.guardX !== null) {
             // Guard behavior: only aggro if target is within 450px
@@ -1118,8 +1137,9 @@ class Enemy {
                 const t = target.entity;
                 if (target.type === 'block') { t.takeDamage(10); }
                 else if (target.type === 'player') { t.takeDamage(15); }
-                else if (target.type === 'soldier' || target.type === 'worker' || target.type === 'hunter') { t.takeDamage(18); }
+                else if (target.type === 'soldier' || target.type === 'worker' || target.type === 'hunter' || target.type === 'archer') { t.takeDamage(18); }
                 else if (target.type === 'outpost' && !t.dead) { t.hp -= 1; if (t.hp < 0) t.hp = 0; }
+                else if (target.type === 'farm' || target.type === 'barrack') { t.takeDamage(15); }
             }
         }
     }
@@ -1776,6 +1796,23 @@ class Worker {
         if (this.dialogueTimer > 0) this.dialogueTimer -= dt;
         if (this.hurtTimer > 0) this.hurtTimer -= dt;
 
+        // --- Alarm Shelter Logic ---
+        if (this.world.alarmActive) {
+            const shelterX = this.world.outpost.x - 500;
+            const dist = Math.abs(shelterX - this.x);
+            if (dist > 20) {
+                const dir = Math.sign(shelterX - this.x);
+                this.vx = dir * 100; this.facingRight = dir > 0;
+                this.state = 'walk_to_shelter';
+            } else {
+                this.vx = 0; this.state = 'shelter_idle';
+            }
+            this.x += this.vx * dt;
+            return;
+        } else if (this.state === 'walk_to_shelter' || this.state === 'shelter_idle') {
+            this.state = 'idle'; // Reset state so they resume work
+        }
+
         if (this.state === 'idle') {
             if (this.carryingLogs > 0) {
                 this.state = 'return_with_logs';
@@ -1832,7 +1869,7 @@ class Worker {
     draw(ctx, cam) {
         if (this.dead) return;
         const sx = this.x - cam.x, sy = this.y;
-        const isWalk = this.state === 'walk_to_tree' || this.state === 'return_with_logs';
+        const isWalk = this.state === 'walk_to_tree' || this.state === 'return_with_logs' || this.state === 'walk_to_shelter';
         const bob = isWalk ? Math.abs(Math.sin(this.time * 12)) * 3 : Math.sin(this.time * 2);
         ctx.save();
         applyHitGlow(ctx, this);
@@ -2209,6 +2246,21 @@ class Hunter {
         this.vy += 1200 * dt; this.y += this.vy * dt;
         if (this.y > this.world.groundY - 60) { this.y = this.world.groundY - 60; this.vy = 0; }
         if (this.attackCd > 0) this.attackCd -= dt;
+
+        // --- Alarm Shelter Logic ---
+        if (this.world.alarmActive) {
+            const shelterX = this.world.outpost.x - 500;
+            const dist = Math.abs(shelterX - this.x);
+            if (dist > 20) {
+                const dir = Math.sign(shelterX - this.x);
+                this.vx = dir * 120; this.facingRight = dir > 0;
+                this.state = 'walk';
+            } else {
+                this.vx = 0; this.state = 'idle';
+            }
+            this.x += this.vx * dt;
+            return;
+        }
 
         if (this.meatCount >= 3 || (this.meatCount > 0 && !this.world.animals.some(a => !a.dead) && !this.world.groundItems.some(i => i.type === 'meat' && !i.picked))) {
             const outX = this.world.outpost.x;
@@ -2724,7 +2776,7 @@ class Character {
 class Outpost {
     constructor(world, x) {
         this.world = world; this.x = x; this.y = world.groundY;
-        this.hp = 100; this.dead = false; this.time = 0;
+        this.hp = 100; this.maxHp = 100; this.dead = false; this.time = 0;
         this.level = 1; // 1 = Outpost, 2 = Town
     }
     update(dt) { this.time += dt; this.dead = this.hp <= 0; }
@@ -2761,6 +2813,28 @@ class Outpost {
             // Label
             ctx.fillStyle = '#ffd700'; ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center';
             ctx.fillText('🏤 TOWN', sx, sy - 182); ctx.textAlign = 'left';
+
+            // ═══ GOLDEN ALARM BELL ═══
+            const bellX = sx + 40, bellY = sy - 105;
+            const swing = this.world.alarmActive ? Math.sin(this.time * 10) * 0.4 : 0;
+            ctx.save();
+            ctx.translate(bellX, bellY); ctx.rotate(swing);
+            ctx.fillStyle = '#daa520'; // Golden Rod
+            ctx.beginPath();
+            ctx.moveTo(-8, 0); ctx.bezierCurveTo(-10, -15, 10, -15, 8, 0);
+            ctx.lineTo(12, 12); ctx.lineTo(-12, 12); ctx.closePath(); ctx.fill();
+            ctx.fillStyle = '#ffd700'; ctx.beginPath(); ctx.arc(0, 12, 4, 0, Math.PI); ctx.fill();
+            // Clapper
+            ctx.fillStyle = '#8b6508'; ctx.beginPath(); ctx.arc(Math.sin(-swing)*5, 12, 3, 0, Math.PI*2); ctx.fill();
+            ctx.restore();
+
+            // Interaction hint
+            const p = this.world.game.player;
+            if (Math.abs(this.x - p.x) < 130) {
+                ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(sx - 80, sy - 175, 160, 20);
+                ctx.fillStyle = this.world.alarmActive ? '#ff4400' : '#ffd700'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
+                ctx.fillText(this.world.alarmActive ? 'Alarm ACTIVE [2]' : '🏤 Ring Alarm Bell [2]', sx, sy - 161); ctx.textAlign = 'left';
+            }
         } else {
             // ── OUTPOST (Refugee Camp) ──
             // Square Main Tent
@@ -2791,11 +2865,11 @@ class Outpost {
                 ctx.fillText('Upgrade to Town 100G [1]', sx, sy - 169); ctx.textAlign = 'left';
             }
         }
-        // HP bar
-        ctx.fillStyle = '#500'; ctx.fillRect(sx - 52, sy - 144, 104, 10);
-        ctx.fillStyle = 'lime'; ctx.fillRect(sx - 52, sy - 144, (this.hp / 100) * 104, 10);
-        ctx.fillStyle = '#0f0'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
-        ctx.fillText(`${this.level >= 2 ? 'Town' : 'Outpost'} ${Math.ceil(this.hp)}/100`, sx, sy - 147); ctx.textAlign = 'left';
+        // HP bar (Standardized 60px width)
+        ctx.fillStyle = '#500'; ctx.fillRect(sx - 30, sy - 144, 60, 8);
+        ctx.fillStyle = 'lime'; ctx.fillRect(sx - 30, sy - 144, (this.hp / this.maxHp) * 60, 8);
+        ctx.fillStyle = '#0f0'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText(Math.ceil(this.hp), sx, sy - 147); ctx.textAlign = 'left';
     }
 }
 
@@ -2803,13 +2877,32 @@ class Outpost {
 class EnemyCamp {
     constructor(world, x) {
         this.world = world; this.x = x; this.y = world.groundY;
-        this.maxHp = 1000; this.hp = 1000;
+        this.maxHp = 5000; this.hp = 5000;
         this.dead = false; this.time = 0;
         this.particles = [];
+        this.hitCounter = 0;
+        this.hitsToSpawn = Math.floor(Math.random() * 3) + 3; // Random 3 to 5 hits
     }
     takeDamage(dmg) {
         if (this.dead) return;
         this.hp -= dmg; sfx.playHit();
+        
+        // --- Randomized Reinforcements ---
+        this.hitCounter++;
+        if (this.hitCounter >= this.hitsToSpawn) {
+            this.hitCounter = 0;
+            this.hitsToSpawn = Math.floor(Math.random() * 3) + 3;
+            // Spawn defenders from the camp portal
+            for (let i = 0; i < 2; i++) this.world.enemies.push(new Enemy(this.world, this.x + (Math.random() - 0.5) * 40));
+            this.world.enemies.push(new EnemyArcher(this.world, this.x + (Math.random() - 0.5) * 40));
+            
+            // Visual feedback for reinforcement spawn
+            for (let i = 0; i < 15; i++) {
+                this.world.particles.push(new Particle(this.x, this.y - 60, '#9b00c8', (Math.random() - 0.5) * 100, -100 - Math.random() * 100));
+            }
+            sfx.beep(200, 'sawtooth', 0.2, 0.3); // Warning sound
+        }
+
         if (this.hp <= 0) {
             this.hp = 0; this.dead = true;
             for (let i = 0; i < 40; i++) {
@@ -2901,8 +2994,8 @@ class EnemyCamp {
             ctx.beginPath(); ctx.arc(lx, ly, 3, 0, Math.PI * 2); ctx.fill();
         }
 
-        // 6. HP Bar
-        const barW = 200, barH = 12;
+        // 6. HP Bar (Standardized 120px width)
+        const barW = 120, barH = 10;
         const bx = sx - barW / 2, by = sy - 180;
         ctx.fillStyle = '#200'; ctx.fillRect(bx - 2, by - 2, barW + 4, barH + 4);
         const hpRatio = this.hp / this.maxHp;
@@ -2919,7 +3012,7 @@ class EnemyCamp {
         ctx.stroke();
 
         ctx.fillStyle = '#fff'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
-        ctx.fillText(`ENEMY COMMAND CAMP ${Math.ceil(this.hp)}/1000`, sx, by - 14);
+        ctx.fillText(`ENEMY COMMAND CAMP ${Math.ceil(this.hp)}/${this.maxHp}`, sx, by - 14);
         ctx.textAlign = 'left';
     }
 }
@@ -3247,8 +3340,8 @@ class World {
         this.woodBlocks = [];
         this.enemies = [];
         // --- Spawn Camp Guards ---
-        for (let i = 0; i < 3; i++) this.enemies.push(new Enemy(this, 4800 + i * 40, 5000));
-        for (let i = 0; i < 2; i++) this.enemies.push(new EnemyArcher(this, 4900 + i * 40, 5000));
+        for (let i = 0; i < 2; i++) this.enemies.push(new Enemy(this, 4800 + i * 40, 5000));
+        for (let i = 0; i < 1; i++) this.enemies.push(new EnemyArcher(this, 4900 + i * 40, 5000));
 
         this.animals = [];
         for (let i = 0; i < 4; i++) {
@@ -3268,6 +3361,8 @@ class World {
         this.moonRed = 0;
         this.time = 0;
         this.hiringBarrack = null; // which barrack is showing hire menu
+        this.hiringRefuge = false; // whether player is near refuge camp
+        this.alarmActive = false; // town alarm bell state
         this.eHoldTimer = 0;
         // Meteor shower
         this.meteors = [];
@@ -3300,7 +3395,10 @@ class World {
         // --- Contextual 1, 2, 3 System ---
         const distToSell = Math.abs(this.sellShop.x - player.x);
         const nearShop = distToSell < 60;
+        const nearRefuge = Math.abs(this.refugeShop.x - player.x) < 60;
         const nearOutpost = Math.abs(this.outpost.x - player.x) < 130;
+
+        this.hiringRefuge = nearRefuge;
         
         // Find nearest farm for upgrade context
         let nearestF = null;
@@ -3359,6 +3457,16 @@ class World {
                         player.inventory.wheat -= 1; player.inventory.gold += 3; sfx.playCoin();
                         this.particles.push(new Particle(this.sellShop.x, this.sellShop.y - 40, '#ffd700'));
                     }
+                } else if (nearOutpost && this.outpost.level >= 2) {
+                    this.alarmActive = !this.alarmActive;
+                    if (this.alarmActive) {
+                        const beep = (hz, vol, delay) => setTimeout(() => sfx.beep(hz, 'sine', 0.08, vol), delay);
+                        beep(600, 0.4, 0); beep(600, 0.4, 150); beep(600, 0.4, 300);
+                        const allCivilians = [...this.workers, ...this.hunters];
+                        for (const c of allCivilians) { c.dialogue = 'To shelter!'; c.dialogueTimer = 2.0; }
+                    } else {
+                        sfx.beep(300, 'sine', 0.1, 0.3);
+                    }
                 } else if (this.hiringBarrack) {
                     this._hireFromMenu(player, 'archer');
                 } else if (this.hiringRefuge) {
@@ -3407,11 +3515,16 @@ class World {
         // Waves
         this.waveTimer -= dt;
         if (this.waveTimer <= 0) { this._spawnWave(); this.waveTimer = this.waveInterval; }
-        // Moon state: go red when wave is near (<15s) or enemies alive
-        this.waveActive = this.enemies.length > 0;
+        // Moon state: go red when wave is near (<15s) or attackers are alive
+        this.waveActive = this.enemies.some(e => !e.guardX);
         const wantRed = this.waveActive || this.waveTimer < 15;
         this.moonRed += ((wantRed ? 1 : 0) - this.moonRed) * dt * 2;
         this.moonRed = Math.max(0, Math.min(1, this.moonRed));
+
+        // Auto-disable alarm when wave is gone
+        if (this.alarmActive && !this.waveActive && this.waveTimer > 30) {
+            this.alarmActive = false;
+        }
         // Update clouds
         for (const c of this.clouds) { c.x += c.speed * dt; if (c.x > 5500) c.x = -200; }
         // Meteor shower
@@ -3554,6 +3667,8 @@ class World {
         if (p.inventory.gold < 100) return;
         p.inventory.gold -= 100;
         this.outpost.level = 2;
+        this.outpost.maxHp = 500;
+        this.outpost.hp = 500;
         sfx.playRepair();
         // Fanfare particles
         for (let i = 0; i < 20; i++) this.particles.push(new Particle(this.outpost.x + (Math.random() - 0.5) * 160, this.outpost.y - 80, '#ffd700'));
@@ -3581,12 +3696,13 @@ class World {
     _spawnWave() {
         this.waveNumber++;
         const count = 4 + this.waveNumber * 2;
-        const spawnX = this.enemyCamp.dead ? 4000 : this.enemyCamp.x - 100;
+        const spawnX = this.enemyCamp.dead ? 4000 : this.enemyCamp.x;
         for (let i = 0; i < count; i++) {
+            const offsetX = (Math.random() - 0.5) * 80;
             if (this.waveNumber >= 6 && Math.random() < 0.3) {
-                this.enemies.push(new EnemyArcher(this, spawnX + Math.random() * 500 + i * 120));
+                this.enemies.push(new EnemyArcher(this, spawnX + offsetX + i * 120));
             } else {
-                this.enemies.push(new Enemy(this, spawnX + Math.random() * 500 + i * 120));
+                this.enemies.push(new Enemy(this, spawnX + offsetX + i * 120));
             }
         }
     }
@@ -3937,6 +4053,7 @@ class Game {
             w.outpost.hp = wd.outpostHp;
             w.outpost.dead = wd.outpostDead;
             w.outpost.level = wd.outpostLevel || 1;
+            w.outpost.maxHp = (w.outpost.level >= 2) ? 500 : 100;
             // Replace default barrack with saved ones
             w.barracks = wd.barracks.map(b => { const bk = new Barrack(w, b.x); return bk; });
             if (!w.barracks.length) w.barracks = [new Barrack(w, 950)];
@@ -4253,7 +4370,7 @@ class Game {
         }
 
         ctx.fillStyle = '#ccc'; ctx.font = 'bold 13px monospace'; ctx.textAlign = 'right';
-        ctx.fillText(`Pos: ${Math.round(p.x)}, ${Math.round(p.y)}`, this.canvas.width - 20, 30);
+        ctx.fillText(`Pos: ${Math.round(p.x)}, ${Math.round(p.y)}`, this.canvas.width - 20, 75);
         ctx.textAlign = 'left';
 
         // ── Controls bar (bottom) ──
@@ -4261,7 +4378,7 @@ class Game {
         ctx.fillRect(0, this.canvas.height - 42, this.canvas.width, 42);
         ctx.fillStyle = '#ddd'; ctx.font = '12px sans-serif';
         ctx.fillText(
-            'A/D Move | Ctrl Sprint | E Action | R Follow | B Wall(30G) | V Barrack(100G) | F Farm(100G) | 1,2,3 Context/Sell | H Heal',
+            'A/D Move | Ctrl Sprint | E Action | R Follow | B Wall(30 Wood) | V Barrack(100G) | F Farm(100G) | 1,2,3 Context/Sell | H Heal',
             12, this.canvas.height - 17
         );
     }

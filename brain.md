@@ -142,12 +142,18 @@ Handled the challenge of responsive resizing in a ground-based coordinate system
 - **Realignment Hook**: If `groundY` changes, the engine triggers `_realignVerticalContent(dy)`. This method iterates through every active array (Units, Buildings, Trees, Items) and applies the vertical delta (`dy`) to their `y` coordinate.
 - **Benefit**: This allows the game to be played fluently while stretching the window or switching between mobile device orientations without any visual glitches.
 
+### 5. Retaliation & Wave Orchestration (v2.5)
+The Enemy Command Camp is no longer a passive objective.
+- **Hit-Counter Logic**: Implemented `hitCounter` and `hitsToSpawn` (randomized 3-5) logic. This triggers a "Retaliation Wave" (2x Minions, 1x Archer) whenever the camp is under player/soldier attack.
+- **Defensive Guard Exclusion**: Initial camp guards are excluded from the `waveActive` check. This ensures the Blood Moon doesn't remain "active" forever due to stationary camp sentinels.
+
 ---
 
 ## 🛠 Project Roadmap & Versioning
 - **v1.8**: Inferno Upgrade (Flame Hammer, Dialogue Polish).
 - **v1.9**: Fauna & Frontiers (Hunter Unit, Meat Economy, Enemy Base Camp).
 - **v2.1**: Control Unification (Contextual 1, 2, 3 Mapping, Streamlined Mobile UI).
+- **v2.6**: Kingdom Security (Alarm Bell, Building Vulnerability, Defense AI Overhaul).
 
 ---
 
@@ -161,3 +167,19 @@ Streamlined the game’s interaction model by consolidating context-sensitive ac
     - **Recruitment**: `1` (Soldier/Worker), `2` (Archer/Hunter).
 - **Simplified Mobile Layout**: Removed explicit "Upgrade" and "Town" buttons in favor of the contextual `1, 2, 3` grid.
 - **Design Intent**: reduces button bloat on mobile and keyboard travel on desktop, making the economy loop faster and more intuitive.
+
+### 2. Town Security & Alarm Systems (v2.6)
+Implemented the **Alarm Bell** to manage civilian safety during raids.
+- **Trigger**: Key `2` when near the Town Hall (Level 2 Outpost). Features a rhythmic triple-beep ("ding ding ding").
+- **Shelter Behavior**: `Worker` and `Hunter` units respond to `world.alarmActive` by switching to `walk_to_shelter` states.
+- **Auto-Resumption**: Units reset to `idle` upon alarm deactivation, allowing standard AI loops to resume tree chopping or hunting.
+
+### 3. Kingdom Defense AI (Building Vulnerability)
+Enemies now treat infrastructure as tactical targets.
+- **Expanded Targeting**: Enemies now include `Farms`, `Barracks`, and `Archers` in their search loops.
+- **Projectile Collision**: `Arrow` physics were updated with wider **60px** collision radius for buildings.
+
+### 4. UI Consistency & Precision
+- **Standardized HP Bars**: Units (30px), Friendly Buildings (60px), Boss Objectives (120px).
+- **Save/Load Integrity**: `maxHp` values are dynamically restored during `_loadGame` to prevent UI overflow bugs.
+- **HUD Safeties**: Switched X/Y coordinate draw to `y=75` to clear mobile utility buttons.
