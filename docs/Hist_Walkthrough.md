@@ -81,3 +81,34 @@ Introduced a town-wide security system and enabled enemies to attack infrastruct
 Standardized HP bars and resolved critical state issues with the Town upgrade.
 - **Key Features**: Compact 60px/120px building HP bars, mobile-optimized HUD layout, and save/load maxHP synchronization.
 - **Result**: Cleaner world UI and robust game state persistence.
+
+---
+
+## 2026-04-17 16:00 - Oak Crusader Trebuchet & Siege Workshop (v3.0)
+Integrated the fully animated **Oak Crusader** trebuchet siege engine into the main game world.
+
+### New Building: Siege Workshop (x=290)
+- Heavy timber frame with stone foundations and a **swinging iron hook** hoist (animated).
+- "⚙ SIEGE WORKSHOP" sign on the facade.
+- Proximity menu: `[1] Hire Trebuchet — 150 Gold + 20 Wood`.
+
+### New Unit: Oak Crusader Trebuchet
+- **HP**: 250 | **Attack**: 120 (splash, 80px radius on impact) + 2/tick while rolling.
+- **Repair**: `[H]` + 10 Wood restores 60 HP per use.
+- **State Machine**: `idle → cocking → charging → release → follow` for the full ballistic sequence.
+- **Controls** (context-sensitive when player is within 100px):
+  - `[1]` Forward (45 px/s, wheel rotates forward, soldier pushes).
+  - `[2]` Retreat (35 px/s, wheel rotates backward, soldier pulls).
+  - `[3]` Launch — triggers the full cocking + charge + whip sequence.
+- **Crew**: Embedded soldier renderer with posture changes per state (push lean, pull lean, idle rest).
+
+### New Projectile: SiegeRock
+- Launched from precise sling-tip position using a **nested 2D rotation matrix** (`_getSlingTip`).
+- Downward steep trajectory; bounces once with 15% energy restitution, then transitions to **rolling mode**.
+- Rolling: decelerates via exponential drag (`Math.pow(0.5, dt)`), emits dust particles, deals continuous damage.
+- **Impact**: 15 dust particles + sfx on first ground contact.
+
+### Code Architecture
+- `SiegeRock` extends the `arrows` array (shares the same draw/update pipeline).
+- `_healAll` replaces `_healSoldier` — now checks trebuchet proximity first (10 Wood), then falls back to wheat-healing for organic units.
+- `nearTrebuchet` proximity variable added in `World.update` — gates `Digit1/2/3` context to siege controls when within 100px.

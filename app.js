@@ -563,9 +563,9 @@ class Arrow {
         this.y += this.vy * dt;
         this.vy += 60 * dt; // gentle gravity arc
         if (this.isEnemy) {
-            const targets = [this.world.game.player, ...this.world.soldiers, ...this.world.workers, ...this.world.archers, ...this.world.hunters, this.world.outpost, ...this.world.farms, ...this.world.barracks];
+            const targets = [this.world.game.player, ...this.world.soldiers, ...this.world.workers, ...this.world.archers, ...this.world.hunters, this.world.outpost, ...this.world.farms, ...this.world.barracks, ...this.world.trebuchets];
             for (const t of targets) {
-                const isBuilding = t === this.world.outpost || this.world.farms.includes(t) || this.world.barracks.includes(t);
+                const isBuilding = t === this.world.outpost || this.world.farms.includes(t) || this.world.barracks.includes(t) || this.world.trebuchets.includes(t);
                 const hitXThreshold = isBuilding ? 60 : 30;
                 if (Math.abs(t.x - this.x) < hitXThreshold && (isBuilding || Math.abs(t.y - this.y) < 50)) {
                     t.takeDamage(15);
@@ -1085,6 +1085,12 @@ class Enemy {
             const d = Math.abs(this.x - b.x);
             if (d < bestDist) { bestDist = d; best = { x: b.x, entity: b, type: 'barrack' }; }
         }
+        // Check trebuchets
+        for (const tr of this.world.trebuchets) {
+            if (tr.dead) continue;
+            const d = Math.abs(this.x - tr.x);
+            if (d < bestDist) { bestDist = d; best = { x: tr.x, entity: tr, type: 'trebuchet' }; }
+        }
         if (this.guardX !== null) {
             // Guard behavior: only aggro if target is within 450px
             return (bestDist < 450) ? best : null;
@@ -1139,7 +1145,7 @@ class Enemy {
                 else if (target.type === 'player') { t.takeDamage(15); }
                 else if (target.type === 'soldier' || target.type === 'worker' || target.type === 'hunter' || target.type === 'archer') { t.takeDamage(18); }
                 else if (target.type === 'outpost' && !t.dead) { t.hp -= 1; if (t.hp < 0) t.hp = 0; }
-                else if (target.type === 'farm' || target.type === 'barrack') { t.takeDamage(15); }
+                else if (target.type === 'farm' || target.type === 'barrack' || target.type === 'trebuchet') { t.takeDamage(15); }
             }
         }
     }
@@ -1529,6 +1535,48 @@ class Shop {
             // Roof
             ctx.fillStyle = '#3a3a3a'; ctx.beginPath(); ctx.moveTo(sx - 50, this.y - 70); ctx.lineTo(sx + 50, this.y - 70); ctx.lineTo(sx + 40, this.y - 90); ctx.lineTo(sx - 40, this.y - 90); ctx.fill();
             ctx.fillStyle = '#111'; ctx.fillRect(sx - 10, this.y - 110, 20, 20);
+        } else if (this.type === 'siege') {
+            // ─── SIEGE WORKSHOP ───────────────────────────────────────────
+            // Stone foundations
+            ctx.fillStyle = '#555'; ctx.fillRect(sx - 57, this.y - 14, 114, 14);
+            ctx.fillStyle = '#444'; ctx.fillRect(sx - 55, this.y - 12, 110, 8);
+            // Timber pillars (Left & Right columns)
+            ctx.fillStyle = '#4e2f15'; ctx.fillRect(sx - 48, this.y - 90, 16, 78);
+            ctx.fillRect(sx + 32, this.y - 90, 16, 78);
+            // Main header beam
+            ctx.fillStyle = '#3d2511'; ctx.fillRect(sx - 52, this.y - 92, 104, 12);
+            // Crossing X-braces on the facade
+            ctx.strokeStyle = '#3d2511'; ctx.lineWidth = 7; ctx.lineCap = 'butt';
+            ctx.beginPath(); ctx.moveTo(sx - 30, this.y - 80); ctx.lineTo(sx + 30, this.y - 20); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(sx + 30, this.y - 80); ctx.lineTo(sx - 30, this.y - 20); ctx.stroke();
+            // Triangular roof
+            ctx.fillStyle = '#2b1a10';
+            ctx.beginPath(); ctx.moveTo(sx - 62, this.y - 88); ctx.lineTo(sx + 62, this.y - 88); ctx.lineTo(sx, this.y - 118); ctx.closePath(); ctx.fill();
+            // Roof ridge line
+            ctx.strokeStyle = '#1a100a'; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.moveTo(sx - 60, this.y - 88); ctx.lineTo(sx, this.y - 118); ctx.lineTo(sx + 60, this.y - 88); ctx.stroke();
+            // ─── IRON HOOK (highlight element) ─────────────────────
+            // Overhead chain/rope from peak
+            const tAnim = this.world.game ? this.world.game.lastTime / 1000 : 0;
+            const hookSwing = Math.sin(tAnim * 0.8) * 4;
+            ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.moveTo(sx + hookSwing, this.y - 110); ctx.lineTo(sx + hookSwing, this.y - 68); ctx.stroke();
+            // Iron hook body (C-curve)
+            ctx.strokeStyle = '#888'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.arc(sx + hookSwing, this.y - 58, 10, -Math.PI * 0.9, 0.5, false); ctx.stroke();
+            // Barbed tip
+            ctx.strokeStyle = '#666'; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.moveTo(sx + hookSwing + 10, this.y - 58); ctx.lineTo(sx + hookSwing + 6, this.y - 47); ctx.stroke();
+            // Chain links (visual only)
+            ctx.fillStyle = '#444';
+            for (let ci = 0; ci < 4; ci++) {
+                ctx.beginPath(); ctx.ellipse(sx + hookSwing, this.y - 110 + ci * 9, 3, 5, 0, 0, Math.PI * 2); ctx.fill();
+            }
+            // Workshop sign
+            ctx.fillStyle = '#4e2f15'; ctx.fillRect(sx - 38, this.y - 57, 76, 18);
+            ctx.strokeStyle = '#d4b798'; ctx.lineWidth = 1.5; ctx.strokeRect(sx - 38, this.y - 57, 76, 18);
+            ctx.fillStyle = '#f5c842'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText('⚙ SIEGE WORKSHOP', sx, this.y - 45); ctx.textAlign = 'left';
         } else {
             // Resource / Sell Shop
             ctx.fillStyle = '#6b4226'; ctx.fillRect(sx - 40, this.y - 60, 80, 60); // Main struct
@@ -1600,6 +1648,13 @@ class Shop {
                 ctx.fillText('Hire Hunter 5 Wood [2]', sx, this.y - 94);
                 ctx.fillStyle = '#aaa'; ctx.font = '11px sans-serif';
                 ctx.fillText('Hunts wildlife and shoots enemies', sx, this.y - 78);
+                ctx.textAlign = 'left';
+            } else if (this.type === 'siege') {
+                ctx.fillRect(sx - 110, this.y - 145, 220, 50);
+                ctx.fillStyle = '#f5c842'; ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center';
+                ctx.fillText('Hire Trebuchet  150G + 20 Wood [1]', sx, this.y - 128);
+                ctx.fillStyle = '#aaa'; ctx.font = '11px sans-serif';
+                ctx.fillText('HP: 250  ATK: 120 splash', sx, this.y - 112);
                 ctx.textAlign = 'left';
             } else {
                 ctx.fillRect(sx - 130, this.y - 160, 260, 115);
@@ -2425,6 +2480,201 @@ class Hunter {
                 ctx.fillText('[H] Heal', sx + 10, sy - 25); ctx.textAlign = 'left';
             }
         }
+    }
+}
+
+// ─── SIEGE ROCK ─────────────────────────────────────────────────────────────
+class SiegeRock {
+    constructor(world, x, y, vx, vy) {
+        this.world = world; this.x = x; this.y = y;
+        this.vx = vx; this.vy = vy; this.rot = 0;
+        this.dead = false; this.rolling = false; this.age = 0;
+        this.dmg = 120; // Massive damage
+        this.dustTimer = 0;
+        this.groundY = world.groundY - 18;
+    }
+    update(dt) {
+        this.age += dt;
+        if (this.age > 8) { this.dead = true; return; }
+        
+        if (!this.rolling) {
+            this.x += this.vx * dt; this.y += this.vy * dt;
+            this.vy += 650 * dt; // Gravity
+            this.rot += 10 * dt;
+            
+            if (this.y >= this.groundY) {
+                this.y = this.groundY; this.vy = -this.vy * 0.15; this.vx *= 0.92;
+                if (Math.abs(this.vy) < 40) { this.rolling = true; this.vy = 0; }
+                sfx.playHit();
+                // Splash Damage upon initial impact
+                for (const e of this.world.enemies) {
+                    if (e.dead) continue;
+                    if (Math.abs(e.x - this.x) < 80) e.takeDamage(this.dmg);
+                }
+                if (!this.world.enemyCamp.dead && Math.abs(this.world.enemyCamp.x - this.x) < 80) {
+                    this.world.enemyCamp.takeDamage(this.dmg);
+                }
+                for (const a of this.world.animals) {
+                    if (!a.dead && Math.abs(a.x - this.x) < 80) a.takeDamage(this.dmg);
+                }
+                for (let i = 0; i < 15; i++) this.world.particles.push(new Particle(this.x, this.groundY + 15, '#777'));
+            }
+        } else {
+            this.x += this.vx * dt; this.vx *= Math.pow(0.5, dt); // Drag
+            this.rot += (this.vx / 20);
+            if (Math.abs(this.vx) > 10) {
+                this.dustTimer += dt;
+                if (this.dustTimer > 0.08) {
+                    this.dustTimer = 0;
+                    this.world.particles.push(new Particle(this.x, this.groundY + 15, 'rgba(120,120,120,0.3)', -this.vx * 0.2, -20));
+                }
+            } else this.dead = true;
+            
+            // Rolling damage (less than impact)
+            for (const e of this.world.enemies) {
+                if (!e.dead && Math.abs(e.x - this.x) < 30) e.takeDamage(2);
+            }
+            if (!this.world.enemyCamp.dead && Math.abs(this.world.enemyCamp.x - this.x) < 30) {
+                this.world.enemyCamp.takeDamage(2);
+            }
+            for (const a of this.world.animals) {
+                if (!a.dead && Math.abs(a.x - this.x) < 30) a.takeDamage(2);
+            }
+        }
+    }
+    draw(ctx, cam) {
+        if (this.dead) return;
+        const sx = this.x - cam.x;
+        ctx.save();
+        ctx.translate(sx, this.y); ctx.rotate(this.rot);
+        ctx.fillStyle = '#555';
+        ctx.beginPath(); ctx.arc(0, 0, 18, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#333'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(-12, -6); ctx.lineTo(12, 6); ctx.stroke();
+        ctx.restore();
+    }
+}
+
+// ─── TREBUCHET ───────────────────────────────────────────────────────────────
+class Trebuchet {
+    constructor(world, x) {
+        this.world = world; this.x = x; this.y = world.groundY;
+        this.vx = 0; this.time = 0;
+        this.maxHp = 250; this.hp = 250; this.dead = false;
+        this.armAngle = -0.5; this.state = 'idle'; // idle, move, retreat, cocking, charging, release, follow
+        this.attackProgress = 0; this.wheelAngle = 0; this.autoAttack = false;
+        this.colors = { wood: '#4e2f15', accent: '#d4b798', metal: '#333', soldier: { legs: '#44301c', tunic: '#604622', vest: '#7f6034', skin: '#f2c6a3', helmet: '#4e6f33' } };
+    }
+    takeDamage(dmg) {
+        this.hp -= dmg; triggerHitGlow(this); sfx.playHit();
+        if (this.hp <= 0) {
+            this.dead = true;
+            for (let i = 0; i < 30; i++) this.world.particles.push(new Particle(this.x, this.y - 30, '#4e2f15'));
+        }
+    }
+    update(dt) {
+        this.time += dt;
+        if (this.state === 'move') {
+            this.x += 45 * dt; this.wheelAngle += 2 * dt;
+        } else if (this.state === 'retreat') {
+            this.x -= 35 * dt; this.wheelAngle -= 1.8 * dt;
+        }
+        
+        const px = this.x + 40, py = this.y - 140;
+        if (this.state === 'cocking') {
+            this.attackProgress += 0.5 * dt;
+            this.armAngle = -0.5 - this.attackProgress * 0.5;
+            if (this.attackProgress >= 1) { this.state = 'charging'; this.attackProgress = 0; }
+        } else if (this.state === 'charging') {
+            this.attackProgress += 1.2 * dt;
+            this.armAngle = -1.0 + Math.sin(this.time * 25) * 0.03;
+            if (this.attackProgress >= 1) { this.state = 'release'; this.attackProgress = 0; }
+        } else if (this.state === 'release') {
+            this.armAngle += 10.8 * dt;
+            if (this.armAngle >= 2.65) {
+                this.state = 'follow';
+                const tip = this._getSlingTip(px, py, this.armAngle);
+                this.world.arrows.push(new SiegeRock(this.world, tip.x, tip.y, 450, 240));
+            }
+        } else if (this.state === 'follow') {
+            this.armAngle -= 1.8 * dt;
+            if (this.armAngle <= -0.5) { this.armAngle = -0.5; this.state = this.autoAttack ? 'cocking' : 'idle'; }
+        }
+    }
+    _getSlingTip(px, py, armAngle) {
+        const slingRot = -armAngle * 0.45;
+        const rx = -32, ry = 32;
+        const rotRx = rx * Math.cos(slingRot) - ry * Math.sin(slingRot);
+        const rotRy = rx * Math.sin(slingRot) + ry * Math.cos(slingRot);
+        const localSlingX = -160 + rotRx;
+        const localSlingY = 0 + rotRy;
+        const finalRelX = localSlingX * Math.cos(armAngle) - localSlingY * Math.sin(armAngle);
+        const finalRelY = localSlingX * Math.sin(armAngle) + localSlingY * Math.cos(armAngle);
+        return { x: px + finalRelX, y: py + finalRelY };
+    }
+    draw(ctx, cam) {
+        const sx = this.x - cam.x, sy = this.y;
+        if (sx < -400 || sx > ctx.canvas.width + 400) return;
+        
+        ctx.save();
+        applyHitGlow(ctx, this);
+        this._drawSoldier(ctx, sx - 110, sy);
+        const px = sx + 40, py = sy - 140;
+        this._drawWheel(ctx, sx - 60, sy - 15); this._drawWheel(ctx, sx + 70, sy - 15);
+        ctx.strokeStyle = this.colors.wood; ctx.lineWidth = 14;
+        ctx.beginPath(); ctx.moveTo(sx - 75, sy - 20); ctx.lineTo(px, py); ctx.lineTo(sx + 95, sy - 20); ctx.stroke();
+        ctx.lineWidth = 10; ctx.beginPath(); ctx.moveTo(sx - 70, sy - 50); ctx.lineTo(sx - 100, sy - 50); ctx.stroke();
+        ctx.save();
+        ctx.translate(px, py); ctx.rotate(this.armAngle);
+        ctx.strokeStyle = this.colors.metal; ctx.lineWidth = 12; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(60, 0); ctx.stroke();
+        ctx.save();
+        ctx.translate(55, 0); ctx.rotate(-this.armAngle + Math.sin(this.time * 6) * 0.12);
+        ctx.fillStyle = '#a00'; ctx.fillRect(-22, 0, 44, 48); ctx.strokeStyle = '#000'; ctx.lineWidth = 2; ctx.strokeRect(-22, 0, 44, 48);
+        ctx.restore();
+        ctx.strokeStyle = this.colors.wood; ctx.lineWidth = 10; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-160, 0); ctx.stroke();
+        if (this.state !== 'release' && this.state !== 'follow') {
+            ctx.save(); ctx.translate(-160, 0); ctx.rotate(-this.armAngle * 0.45);
+            ctx.strokeStyle = this.colors.accent; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, -2); ctx.lineTo(-32, 32); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(0, 2); ctx.lineTo(-32, 32); ctx.stroke();
+            ctx.translate(-32, 32); ctx.rotate(0.8);
+            ctx.fillStyle = '#4a2c1a'; ctx.beginPath(); ctx.ellipse(0, 0, 16, 9, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#666'; ctx.beginPath(); ctx.arc(0, 0, 16, 0, Math.PI * 2); ctx.fill();
+            ctx.restore();
+        }
+        ctx.restore();
+        ctx.fillStyle = this.colors.accent; ctx.beginPath(); ctx.arc(px, py, 14, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(px, py, 6, 0, Math.PI * 2); ctx.fill();
+        const dist = Math.abs(this.x - this.world.game.player.x);
+        if (dist < 100) {
+            ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(sx - 140, sy - 210, 280, 50);
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText('[1] Forward  [2] Retreat  [3] Launch  [H] Repair (10W)', sx, sy - 178);
+            ctx.textAlign = 'left';
+        }
+        ctx.fillStyle = '#400'; ctx.fillRect(sx - 40, sy - 195, 80, 5);
+        const hpRatio = this.hp / this.maxHp;
+        ctx.fillStyle = hpRatio > 0.5 ? '#0c0' : hpRatio > 0.25 ? '#f5a623' : '#e00';
+        ctx.fillRect(sx - 40, sy - 195, hpRatio * 80, 5);
+        ctx.restore();
+    }
+    _drawWheel(ctx, wx, wy) {
+        ctx.save(); ctx.translate(wx, wy); ctx.rotate(this.wheelAngle);
+        ctx.strokeStyle = this.colors.wood; ctx.lineWidth = 6;
+        ctx.beginPath(); ctx.arc(0, 0, 18, 0, Math.PI * 2); ctx.stroke();
+        for (let i = 0; i < 6; i++) { ctx.rotate(Math.PI / 3); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(18, 0); ctx.stroke(); }
+        ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+    }
+    _drawSoldier(ctx, sx, sy) {
+        const bob = (this.state === 'move' || this.state === 'retreat') ? Math.abs(Math.sin(this.time * 12)) * 3 : 0;
+        ctx.save(); ctx.translate(sx, sy - 58 - bob);
+        if (this.state === 'move') ctx.rotate(0.35); else if (this.state === 'retreat') ctx.rotate(-0.15);
+        const ls = (this.state === 'move' || this.state === 'retreat') ? Math.sin(this.time * 12) * 6 : 0;
+        ctx.fillStyle = this.colors.soldier.legs; ctx.fillRect(6 - ls, 42, 7, 16); ctx.fillRect(17 + ls, 42, 7, 16);
+        ctx.fillStyle = this.colors.soldier.tunic; ctx.beginPath(); ctx.moveTo(4, 16); ctx.lineTo(26, 16); ctx.lineTo(30, 40); ctx.lineTo(24, 44); ctx.lineTo(6, 44); ctx.lineTo(0, 40); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = this.colors.soldier.skin; ctx.fillRect(12, 12, 6, 5); ctx.beginPath(); ctx.ellipse(15, 2, 11, 12, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = this.colors.soldier.helmet; ctx.beginPath(); ctx.moveTo(6, 0); ctx.quadraticCurveTo(8, -11, 15, -12); ctx.quadraticCurveTo(24, -11, 25, 2); ctx.fill();
+        ctx.strokeStyle = this.colors.soldier.tunic; ctx.lineWidth = 4; ctx.lineCap = 'round';
+        ctx.beginPath(); if (this.state === 'move') { ctx.moveTo(25, 22); ctx.lineTo(55, 22); } else if (this.state === 'retreat') { ctx.moveTo(25, 25); ctx.lineTo(50, 25); } else { ctx.moveTo(25, 22); ctx.lineTo(40, 35); } ctx.stroke();
+        ctx.restore();
     }
 }
 
@@ -3295,6 +3545,7 @@ class World {
         for (const tx of leftTreePositions) this.foregroundTrees.push(new ForegroundTree(this, tx));
         this.axeShop = new Shop(this, 500, 'axe');
         this.sellShop = new Shop(this, 750, 'sell');
+        this.siegeShop = new Shop(this, 290, 'siege');
         this.refugeShop = new Shop(this, 1450, 'refuge');
         this.hammerShop = new Shop(this, 1600, 'hammer');
 
@@ -3311,6 +3562,7 @@ class World {
         this.enemyCamp = new EnemyCamp(this, 5000); // New Target
         this.barracks = [new Barrack(this, 950)];
         this.farms = [];
+        this.trebuchets = [];
         this.soldiers = [];
         this.archers = [];
         this.birds = [];
@@ -3388,7 +3640,7 @@ class World {
         // Keybinds
         if (input.justPressed('KeyB')) this._buildWoodBlock(player);
         if (input.justPressed('KeyE')) this._handleE(player);
-        if (input.justPressed('KeyH')) this._healSoldier(player);
+        if (input.justPressed('KeyH')) this._healAll(player);
         if (input.justPressed('KeyV')) this._buildBarrack(player);
         if (input.justPressed('KeyF')) this._buildFarm(player);
 
@@ -3397,7 +3649,16 @@ class World {
         const nearShop = distToSell < 60;
         const nearRefuge = Math.abs(this.refugeShop.x - player.x) < 60;
         const nearOutpost = Math.abs(this.outpost.x - player.x) < 130;
+        const nearSiegeShop = Math.abs(this.siegeShop.x - player.x) < 60;
 
+        // Find nearest trebuchet
+        let nearestTrebuchet = null;
+        let minTrebDist = 100;
+        for (const t of this.trebuchets) {
+            const d = Math.abs(t.x - player.x);
+            if (d < minTrebDist) { minTrebDist = d; nearestTrebuchet = t; }
+        }
+        this.nearTrebuchet = nearestTrebuchet;
         this.hiringRefuge = nearRefuge;
         
         // Find nearest farm for upgrade context
@@ -3406,7 +3667,29 @@ class World {
             if (Math.abs(f.x - player.x) < 120 && f.level === 1) nearestF = f;
         }
 
-        // 1. Digital 1: Wood Sell (Tap/Hold), Town Upgrade, Farm Upgrade, Hire 1
+        // ─── TREBUCHET DIRECT CONTROLS (HIGHEST PRIORITY) ───
+        // Bypasses tap/hold sell logic entirely when player is next to a trebuchet.
+        if (this.nearTrebuchet) {
+            const t = this.nearTrebuchet;
+            
+            // Toggle auto-attack on [3]
+            if (input.justPressed('Digit3')) {
+                t.autoAttack = !t.autoAttack;
+                if (t.autoAttack && t.state === 'idle') t.state = 'cocking';
+            }
+
+            const busy = (t.state === 'cocking' || t.state === 'charging' || t.state === 'release' || t.state === 'follow');
+            if (!busy) {
+                if (input.justPressed('Digit1')) {
+                    t.state = (t.state === 'move') ? 'idle' : 'move';    // toggle forward
+                }
+                if (input.justPressed('Digit2')) {
+                    t.state = (t.state === 'retreat') ? 'idle' : 'retreat'; // toggle retreat
+                }
+            }
+            // Prevent sell/hire digit timers from accumulating
+            this.digit1Hold = 0; this.digit2Hold = 0; this.digit3Hold = 0;
+        } else {
         if (input.isDown('Digit1')) {
             this.digit1Hold += dt;
             if (this.digit1Hold >= 2.0 && nearShop) {
@@ -3420,7 +3703,12 @@ class World {
         } else {
             if (this.digit1Hold > 0 && this.digit1Hold < 2.0) {
                 // Was a tap
-                if (nearShop) {
+                if (this.nearTrebuchet) {
+                    // Trebuchet Forward
+                    this.nearTrebuchet.state = 'move';
+                } else if (nearSiegeShop) {
+                    this._hireTrebuchet(player);
+                } else if (nearShop) {
                     if (player.inventory.wood >= 1) {
                         player.inventory.wood -= 1; player.inventory.gold += 2; sfx.playCoin();
                         this.particles.push(new Particle(this.sellShop.x, this.sellShop.y - 40, '#ffd700'));
@@ -3452,7 +3740,10 @@ class World {
             }
         } else {
             if (this.digit2Hold > 0 && this.digit2Hold < 2.0) {
-                if (nearShop) {
+                if (this.nearTrebuchet) {
+                    // Trebuchet Retreat
+                    this.nearTrebuchet.state = 'retreat';
+                } else if (nearShop) {
                     if (player.inventory.wheat >= 1) {
                         player.inventory.wheat -= 1; player.inventory.gold += 3; sfx.playCoin();
                         this.particles.push(new Particle(this.sellShop.x, this.sellShop.y - 40, '#ffd700'));
@@ -3501,6 +3792,7 @@ class World {
             }
             this.digit3Hold = 0;
         }
+        } // end else (not nearTrebuchet) — digit 1/2/3 sell/hire logic
 
         // Auto-detect nearest barrack for quick hiring
         let nearestB = null;
@@ -3579,6 +3871,8 @@ class World {
         this.arrows = this.arrows.filter(a => !a.dead);
         this.heroProjectiles.forEach(p => p.update(dt));
         this.heroProjectiles = this.heroProjectiles.filter(p => !p.dead);
+        this.trebuchets.forEach(t => t.update(dt));
+        this.trebuchets = this.trebuchets.filter(t => !t.dead);
         this.enemies.forEach(e => e.update(dt));
         this.enemies.filter(e => e.dead && !e.coinDropped).forEach(e => e.die(this));
         this.enemies = this.enemies.filter(e => !e.dead);
@@ -3609,8 +3903,8 @@ class World {
     _realignVerticalContent(dy) {
         this.game.player.y += dy;
         const objects = [
-            this.outpost, this.enemyCamp, this.axeShop, this.sellShop, this.refugeShop, this.hammerShop,
-            ...this.barracks, ...this.farms, ...this.soldiers, ...this.archers, ...this.workers, ...this.hunters,
+            this.outpost, this.enemyCamp, this.axeShop, this.sellShop, this.siegeShop, this.refugeShop, this.hammerShop,
+            ...this.barracks, ...this.farms, ...this.trebuchets, ...this.soldiers, ...this.archers, ...this.workers, ...this.hunters,
             ...this.enemies, ...this.animals, ...this.npcs, ...this.decorations, ...this.foregroundTrees,
             ...this.birds, ...this.ladybugs, ...this.groundItems, ...this.particles, ...this.arrows
         ];
@@ -3644,7 +3938,21 @@ class World {
             p.inventory.wood -= 50; nearest.level = 2; sfx.playRepair();
         }
     }
-    _healSoldier(p) {
+    _healAll(p) {
+        // 1. Attempt trebuchet repair (10 Wood)
+        for (const t of this.trebuchets) {
+            if (t.dead) continue;
+            if (t.hp >= t.maxHp) continue;
+            if (Math.abs(t.x - p.x) < 120) {
+                if (p.inventory.wood < 10) return;
+                p.inventory.wood -= 10;
+                t.hp = Math.min(t.maxHp, t.hp + 60);
+                sfx.playRepair();
+                for (let i = 0; i < 8; i++) this.particles.push(new Particle(t.x, t.y - 60, '#00ff88', (Math.random() - 0.5) * 80, -Math.random() * 100 - 40));
+                return;
+            }
+        }
+        // 2. Heal nearest soldier/unit with Wheat
         if (p.inventory.wheat <= 0) return;
         const targets = [...this.soldiers, ...this.archers, ...this.workers, ...this.hunters];
         for (const sol of targets) {
@@ -3660,6 +3968,14 @@ class World {
                 return;
             }
         }
+    }
+    _hireTrebuchet(p) {
+        if (p.inventory.gold < 150 || p.inventory.wood < 20) return;
+        p.inventory.gold -= 150;
+        p.inventory.wood -= 20;
+        this.trebuchets.push(new Trebuchet(this, this.siegeShop.x + 80));
+        sfx.playHire();
+        for (let i = 0; i < 20; i++) this.particles.push(new Particle(this.siegeShop.x, this.siegeShop.y - 50, '#c8a000'));
     }
     _upgradeTown(p) {
         if (this.outpost.dead || this.outpost.level >= 2) return;
@@ -3914,6 +4230,7 @@ class World {
         this.farms.forEach(f => f.draw(ctx, cam, player));
         this.axeShop.draw(ctx, cam, player);
         this.sellShop.draw(ctx, cam, player);
+        this.siegeShop.draw(ctx, cam, player);
         this.refugeShop.draw(ctx, cam, player);
         ctx.beginPath();
         this.barracks.forEach(b => b.draw(ctx, cam, player));
@@ -3923,6 +4240,8 @@ class World {
         this.enemyCamp.draw(ctx, cam);
         ctx.beginPath();
         this.foregroundTrees.forEach(t => t.draw(ctx, cam));
+        ctx.beginPath();
+        this.trebuchets.forEach(t => t.draw(ctx, cam)); // front layer — after buildings & trees
         ctx.beginPath();
         this.npcs.forEach(n => n.draw(ctx, cam));
         this.workers.forEach(w => w.draw(ctx, cam));
@@ -4033,6 +4352,7 @@ class Game {
                 archers: this.world.archers.filter(a => !a.dead).map(a => ({ x: a.x, hp: a.hp, guardX: a.guardX, following: a.following })),
                 workers: this.world.workers.filter(w => !w.dead).map(w => ({ x: w.x, hp: w.hp, carryingLogs: w.carryingLogs })),
                 woodBlocks: this.world.woodBlocks.filter(b => !b.dead).map(b => ({ x: b.x, hp: b.hp })),
+                trebuchets: this.world.trebuchets.filter(t => !t.dead).map(t => ({ x: t.x, hp: t.hp })),
                 enemyCampHp: this.world.enemyCamp.hp,
                 enemyCampDead: this.world.enemyCamp.dead
             }
@@ -4066,6 +4386,8 @@ class Game {
             w.workers = (wd.workers || []).map(work => { const worker = new Worker(w, work.x); worker.hp = work.hp; worker.carryingLogs = work.carryingLogs; return worker; });
             // Wood blocks
             w.woodBlocks = (wd.woodBlocks || []).map(b => { const bl = new WoodBlock(w, b.x); bl.hp = b.hp; return bl; });
+            // Trebuchets
+            w.trebuchets = (wd.trebuchets || []).map(t => { const tr = new Trebuchet(w, t.x); tr.hp = t.hp; return tr; });
             // Enemy Camp
             if (wd.enemyCampHp !== undefined) {
                 w.enemyCamp.hp = wd.enemyCampHp;

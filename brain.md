@@ -58,7 +58,9 @@ One of the key technical achievements was the 1:1 graphics preview tool.
 - **Hiring Flow**: 
   - Village NPCs (Refugees) -> Hired as Workers or Hunters at the Refuge Tent.
   - Soldiers/Archers -> Hired at the Barracks, initially assigned a `guardX` position 600-700 pixels into the defensive perimeter.
+  - **Oak Crusader** -> Hired at the Siege Workshop (x=290) for 150 Gold + 20 Wood.
 - **Healing**: Player uses `Wheat` resource to heal injured units via proximity-based interaction (`[H]` key).
+- **Trebuchet Repair**: `[H]` near a damaged trebuchet consumes 10 Wood and restores 60 HP (priority over wheat-healing).
 - **Environmental Interaction**: 
   - Entities like `Bird` can be "tethered" to world objects like `ForegroundTree`.
   - Triggering global state changes (like chopping a tree) can signal these sub-entities to change states (e.g., from `perched` to `flyingAway`).
@@ -72,9 +74,10 @@ One of the key technical achievements was the 1:1 graphics preview tool.
 ### 2. Physics-Visual Parity
 - **The "Leading Edge" Rule**: When animating swings (like the King's axe), the blade must stay on the leading edge of the rotation. Misalignment causes "handle-hitting," where it looks like the unit misses even if the collision box overlaps.
 - **Animation Syncing**: The `actionTimer` should dictate the visual progress (0→1) of a swing to ensure the frame-data and the visual "impact" happen simultaneously. Standardizing on a 0.5s duration for heavy attacks provides a consistent "weight" to the weapon.
+- **Nested Rotation Matrix for Sling Tip** (`_getSlingTip`): When a secondary body (sling) is attached to a rotating primary body (trebuchet arm), the sling's own rotation must be composed on top of the arm's world rotation. Use a full 2D rotation matrix application for both the local offset and the final world-space transform. Skipping this causes a "second bounce" artifact where the projectile spawns offset from the visual sling tip.
 
 ### 3. Polish & Immersion
-- **Spawning Vectors**: Initializing grounded units at `world.groundY - offset` instead of `0` (sky) creates an immersive "exiting building" effect. Combining this with a `spawnWalkTimer` makes recruitement feel like a natural part of the world rather than a game event.
+- **Spawning Vectors**: Initializing grounded units at `world.groundY - offset` instead of `0` (sky) creates an immersive "exiting building" effect. Combining this with a `spawnWalkTimer` makes recruitment feel like a natural part of the world rather than a game event.
 - **Input Streamlining**: Transitioning from interaction gates (like `[E] to open menu`) to proximity-based triggers makes gameplay feel significantly faster. User experience is greatly improved when players can perform actions (like hiring or selling) with a single keypress once within range.
 
 
@@ -132,7 +135,7 @@ The enemy camp at `x=5000` serves as both a narrative waypoint and a mechanical 
 Implemented a "Return-to-Post" behavior for enemy units to prevent kiting exploits.
 - **Property-Driven AI**: The `guardX` property allows a generic `Enemy` to behave as a sentinel.
 - **Aggro Range**: Guards now have a detection limit. They will ignore targets (Player/Units/Outpost) unless they are within **450px**. This prevents guards from leaving their camp to chase distant players.
-- **Logic**: If no target is within the 450px aggro range, the unit checks its current `x` against `guardX`. If the distance is > 40px, it walks back to its post at 70% speed.
+- **Logic**: If no target is within the 450px aggro range, the unit checks its current `x` against `guardX`. If the distance is >40px, it walks back to its post at 70% speed.
 - **Benefit**: This creates distinct "Boss Mini-Zones" and prevents the game from becoming a global chase. Guards will stay tethered to their objective.
 
 ### 4. Stretchable Graphics (Vertical Realignment)
@@ -154,19 +157,21 @@ The Enemy Command Camp is no longer a passive objective.
 - **v1.9**: Fauna & Frontiers (Hunter Unit, Meat Economy, Enemy Base Camp).
 - **v2.1**: Control Unification (Contextual 1, 2, 3 Mapping, Streamlined Mobile UI).
 - **v2.6**: Kingdom Security (Alarm Bell, Building Vulnerability, Defense AI Overhaul).
+- **v3.0**: Siege Warfare (Oak Crusader Trebuchet, Siege Workshop, SiegeRock ballistics).
 
 ---
 
 ## 🏗 Key Patterns & Architecture
 
-### 1. Contextual Unified Controls (v2.1)
-Streamlined the game’s interaction model by consolidating context-sensitive actions into the primary number keys (`1`, `2`, `3`).
+### 1. Contextual Unified Controls (v2.1 → v3.0)
+Streamlined the game's interaction model by consolidating context-sensitive actions into the primary number keys (`1`, `2`, `3`).
 - **Mapping Strategy**:
     - **Resource Shop**: `1` (Wood), `2` (Wheat), `3` (Meat). Tap for 1 unit, Hold(2s) for all units.
     - **Upgrade Zones**: `1` triggers Farm or Town updates.
-    - **Recruitment**: `1` (Soldier/Worker), `2` (Archer/Hunter).
-- **Simplified Mobile Layout**: Removed explicit "Upgrade" and "Town" buttons in favor of the contextual `1, 2, 3` grid.
-- **Design Intent**: reduces button bloat on mobile and keyboard travel on desktop, making the economy loop faster and more intuitive.
+    - **Recruitment**: `1` (Soldier/Worker/Trebuchet), `2` (Archer/Hunter).
+    - **Trebuchet Control** (within 100px): `1` Forward, `2` Retreat, `3` Launch.
+- **Priority Hierarchy**: Trebuchet proximity > Siege Shop > Sell Shop > Outpost > Farm > Barrack > Refuge.
+- **Design Intent**: Reduces button bloat on mobile and keyboard travel on desktop.
 
 ### 2. Town Security & Alarm Systems (v2.6)
 Implemented the **Alarm Bell** to manage civilian safety during raids.
@@ -183,3 +188,11 @@ Enemies now treat infrastructure as tactical targets.
 - **Standardized HP Bars**: Units (30px), Friendly Buildings (60px), Boss Objectives (120px).
 - **Save/Load Integrity**: `maxHp` values are dynamically restored during `_loadGame` to prevent UI overflow bugs.
 - **HUD Safeties**: Switched X/Y coordinate draw to `y=75` to clear mobile utility buttons.
+
+### 5. Siege Unit Architecture (v3.0)
+The `Trebuchet` class introduced a new pattern for **vehicle-class units** that are manually operated rather than AI-driven.
+- **State Machine**: `idle → move/retreat → cocking → charging → release → follow`. States flow sequentially and cannot be interrupted mid-sequence.
+- **Embedded Actor**: The crew soldier is rendered by `_drawSoldier()` directly inside `Trebuchet.draw()`, keeping the pusher visually attached to the machine.
+- **Projectile Hand-off**: `_getSlingTip()` uses a nested 2D rotation matrix to compute the world-space coordinate of the sling's release point at the exact moment of launch — preventing the "second bounce" misalignment artifact.
+- **Rolling Physics**: `SiegeRock` uses `Math.pow(0.5, dt)` exponential drag for deceleration that is frame-rate independent and physically plausible.
+- **Unified Heal Dispatch**: `_healAll()` checks trebuchet proximity and resource type (Wood) first, then falls back to unit healing with Wheat.

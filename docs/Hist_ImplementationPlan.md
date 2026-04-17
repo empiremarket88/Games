@@ -118,3 +118,39 @@ Standardize visual feedback and resolve load-game state issues.
 - **HUD Layout**: Moved X/Y coordinates down to avoid mobile button overlap.
 - **Save Fix**: Explicitly restore Outpost `maxHp` based on level during load sequence.
 - **Alarm SFX**: Refined triple-beep "ding ding ding" rhythm.
+
+---
+
+## 2026-04-17 16:00 - Oak Crusader Siege Engine Integration (v3.0)
+Port the fully refined trebuchet prototype into the main game engine with a dedicated Siege Workshop building.
+
+### Goals
+- HP: 250 | Attack: 120 splash | Cost: 150 Gold + 20 Wood
+- Context-sensitive controls: `[1]` Forward, `[2]` Retreat, `[3]` Launch, `[H]` Repair (10 Wood)
+- Siege Workshop at `x=290` with iron-hook aesthetic
+
+### Proposed Changes
+
+#### `app.js` — New Classes
+- **`SiegeRock`**: Projectile with gravity, single-bounce physics, rolling drag, dust particles, and splash damage.
+- **`Trebuchet`**: Siege unit with 7-state machine, embedded soldier renderer, wheel animation, and `_getSlingTip` rotation matrix for pixel-perfect launch origin.
+
+#### `app.js` — `Shop` Class Extension
+- Added `'siege'` type branch to `Shop.draw()`:
+  - **Visual**: Stone foundations, timber pillars, X-brace facade, triangular roof, animated swinging iron hook with chain links.
+  - **Menu**: Shows hire cost and stats when player is within 60px.
+
+#### `app.js` — `World` Class
+- **Constructor**: Added `this.siegeShop = new Shop(this, 290, 'siege')` and `this.trebuchets = []`.
+- **`update()`**: Added `nearTrebuchet` proximity detection; gates `Digit1/2/3` to trebuchet controls when within 100px. Added `nearSiegeShop` check for hiring via `[1]`.
+- **`_healAll()`**: New method replaces `_healSoldier`. Checks trebuchet proximity first (10 Wood), then falls back to wheat-healing for organic units.
+- **`_hireTrebuchet()`**: Deducts 150 Gold + 20 Wood, spawns `Trebuchet` at shop x+80, plays hire SFX.
+- **`draw()`**: Renders `siegeShop` and `trebuchets` array in the entity pass.
+- **`_realignVerticalContent()`**: Extended to include `siegeShop` and `trebuchets`.
+
+### Verification
+- Navigate to x=290 → Siege Workshop with iron hook renders correctly.
+- Approach with 150G + 20W, press [1] → Trebuchet spawns.
+- Stand within 100px of trebuchet → [1][2][3] context-switch to siege controls.
+- Press [3] → Cocking → Charging (creak) → Release whip → Rock launches downward → Rolls and damages enemies.
+- Press [H] with 10 Wood near damaged trebuchet → HP restored, green particles.
