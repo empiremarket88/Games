@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,6 +13,7 @@
             --card-bg: #111116;
             --text: #e0e0e6;
         }
+
         body {
             background: var(--bg);
             color: var(--text);
@@ -24,11 +26,13 @@
             overflow-x: hidden;
             background-image: radial-gradient(circle at 50% 50%, rgba(212, 183, 152, 0.05) 0%, transparent 70%);
         }
+
         header {
             text-align: center;
             padding: 60px 20px 30px;
             max-width: 900px;
         }
+
         h1 {
             font-size: 3.5rem;
             margin: 0;
@@ -38,23 +42,26 @@
             -webkit-text-fill-color: transparent;
             letter-spacing: -2px;
         }
+
         .main-stage {
             background: var(--card-bg);
-            border: 1px solid rgba(255,255,255,0.05);
+            border: 1px solid rgba(255, 255, 255, 0.05);
             border-radius: 40px;
             padding: 40px;
             width: 900px;
             max-width: 95vw;
-            box-shadow: 0 50px 100px rgba(0,0,0,0.8);
+            box-shadow: 0 50px 100px rgba(0, 0, 0, 0.8);
             position: relative;
         }
+
         canvas {
-            background: rgba(0,0,0,0.4);
+            background: rgba(0, 0, 0, 0.4);
             border-radius: 24px;
             width: 100%;
             height: 440px;
             display: block;
         }
+
         .controls {
             display: flex;
             gap: 12px;
@@ -62,10 +69,11 @@
             justify-content: center;
             flex-wrap: wrap;
         }
+
         .btn {
-            background: rgba(255,255,255,0.05);
+            background: rgba(255, 255, 255, 0.05);
             color: #fff;
-            border: 1px solid rgba(255,255,255,0.1);
+            border: 1px solid rgba(255, 255, 255, 0.1);
             padding: 14px 30px;
             border-radius: 12px;
             font-weight: 600;
@@ -74,15 +82,18 @@
             font-size: 0.9rem;
             min-width: 140px;
         }
+
         .btn:hover {
             transform: translateY(-4px);
-            background: rgba(255,255,255,0.1);
+            background: rgba(255, 255, 255, 0.1);
             border-color: var(--accent);
         }
+
         .btn.active {
             background: var(--accent);
             color: #000;
         }
+
         .description-box {
             margin-top: 30px;
             text-align: center;
@@ -93,318 +104,321 @@
         }
     </style>
 </head>
+
 <body>
 
-<header>
-    <h1>The Oak Crusader: Ground Strike</h1>
-    <p style="opacity:0.6">Precision downward-trajectory mapping with high-speed rolling momentum.</p>
-</header>
+    <header>
+        <h1>The Oak Crusader: Ground Strike</h1>
+        <p style="opacity:0.6">Precision downward-trajectory mapping with high-speed rolling momentum.</p>
+    </header>
 
-<div class="main-stage">
-    <canvas id="stage" width="900" height="440"></canvas>
-    
-    <div class="controls">
-        <button id="btnIdle" class="btn active" onclick="setMode('IDLE')">Standby</button>
-        <button id="btnMove" class="btn" onclick="setMode('MOVE')">Patrol (Push)</button>
-        <button id="btnRetreat" class="btn" onclick="setMode('RETREAT')">Retreat (Pull)</button>
-        <button id="btnFire" class="btn" onclick="setMode('ATTACK')">Fire Sequence</button>
+    <div class="main-stage">
+        <canvas id="stage" width="900" height="440"></canvas>
+
+        <div class="controls">
+            <button id="btnIdle" class="btn active" onclick="setMode('IDLE')">Standby</button>
+            <button id="btnMove" class="btn" onclick="setMode('MOVE')">Patrol (Push)</button>
+            <button id="btnRetreat" class="btn" onclick="setMode('RETREAT')">Retreat (Pull)</button>
+            <button id="btnFire" class="btn" onclick="setMode('ATTACK')">Fire Sequence</button>
+        </div>
     </div>
-</div>
 
-<div class="description-box">
-    Precision Physics: Eliminated the "2nd bounce" via a full 2D rotation matrix for the sling tip. The rock now shoots downward with high horizontal velocity, maintaining momentum as it skims the floor.
-</div>
+    <div class="description-box">
+        Precision Physics: Eliminated the "2nd bounce" via a full 2D rotation matrix for the sling tip. The rock now
+        shoots downward with high horizontal velocity, maintaining momentum as it skims the floor.
+    </div>
 
-<script>
-    const canvas = document.getElementById('stage');
-    const ctx = canvas.getContext('2d');
-    const W = canvas.width, H = canvas.height;
-    const groundY = H - 60;
+    <script>
+        const canvas = document.getElementById('stage');
+        const ctx = canvas.getContext('2d');
+        const W = canvas.width, H = canvas.height;
+        const groundY = H - 60;
 
-    const colors = {
-        wood: '#4e2f15',
-        accent: '#d4b798',
-        metal: '#333',
-        soldier: {
-            legs: '#44301c',
-            tunic: '#604622',
-            vest: '#7f6034',
-            skin: '#f2c6a3',
-            helmet: '#4e6f33',
-            hair: '#442211'
-        }
-    };
-
-    let state = {
-        mode: 'IDLE',
-        x: 430,
-        wheelAngle: 0,
-        armAngle: -0.5, 
-        attackPhase: 'IDLE',
-        attackProgress: 0,
-        projectile: null,
-        particles: [],
-        time: 0
-    };
-
-    function setMode(mode) {
-        state.mode = mode;
-        if (mode === 'ATTACK') {
-            state.attackPhase = 'COCKING';
-            state.attackProgress = 0;
-            state.projectile = null;
-        }
-        document.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
-        if (mode === 'IDLE') document.getElementById('btnIdle').classList.add('active');
-        if (mode === 'MOVE') document.getElementById('btnMove').classList.add('active');
-        if (mode === 'RETREAT') document.getElementById('btnRetreat').classList.add('active');
-        if (mode === 'ATTACK') document.getElementById('btnFire').classList.add('active');
-    }
-
-    function createDust(x, y, vx, vy, color = 'rgba(255,255,255,0.2)', life = 1.0) {
-        state.particles.push({ x, y, vx, vy, life, color });
-    }
-
-    function drawSoldier(sx, sy, mode, time) {
-        const sx_scaled = sx;
-        const sy_scaled = sy - 58; 
-        const bob = (mode === 'MOVE' || mode === 'RETREAT') ? Math.abs(Math.sin(time * 12)) * 3 : 0;
-        
-        ctx.save();
-        ctx.translate(sx_scaled, sy_scaled - bob);
-        if (mode === 'MOVE') ctx.rotate(0.35);
-        else if (mode === 'RETREAT') { ctx.rotate(-0.15); ctx.translate(-5, 5); }
-
-        const ls = (mode === 'MOVE' || mode === 'RETREAT') ? Math.sin(time * 12) * 6 : 0;
-        ctx.fillStyle = colors.soldier.legs; 
-        ctx.fillRect(6 - ls, 42, 7, 16); ctx.fillRect(17 + ls, 42, 7, 16);
-        ctx.fillStyle = colors.soldier.tunic;
-        ctx.beginPath();
-        ctx.moveTo(4, 16); ctx.lineTo(26, 16); ctx.lineTo(30, 40); ctx.lineTo(24, 44); ctx.lineTo(6, 44); ctx.lineTo(0, 40); ctx.closePath();
-        ctx.fill();
-        ctx.fillStyle = colors.soldier.vest;
-        ctx.beginPath();
-        ctx.moveTo(11, 16); ctx.lineTo(19, 16); ctx.lineTo(22, 41); ctx.lineTo(8, 41); ctx.closePath();
-        ctx.fill();
-        ctx.fillStyle = colors.soldier.skin; ctx.fillRect(12, 12, 6, 5);
-        ctx.beginPath(); ctx.ellipse(15, 2, 11, 12, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = colors.soldier.helmet;
-        ctx.beginPath();
-        ctx.moveTo(6, 0); ctx.quadraticCurveTo(8, -11, 15, -12); ctx.quadraticCurveTo(24, -11, 25, 2); ctx.lineTo(24, 5); ctx.lineTo(6, 5); ctx.closePath();
-        ctx.fill();
-        ctx.strokeStyle = colors.soldier.tunic; ctx.lineWidth = 4; ctx.lineCap = 'round';
-        ctx.beginPath(); 
-        if (mode === 'MOVE') { ctx.moveTo(25, 22); ctx.lineTo(55, 22); }
-        else if (mode === 'RETREAT') { ctx.moveTo(25, 25); ctx.lineTo(50, 25); }
-        else { ctx.moveTo(25, 22); ctx.lineTo(40, 35); }
-        ctx.stroke();
-        ctx.restore();
-    }
-
-    function getSlingTip(px, py, armAngle) {
-        // MATCHING TRANSFORMATIONS IN DRAW():
-        // 1. Pivot (px, py) 
-        // 2. Rotate by armAngle
-        // 3. Translate by -160 (armLength)
-        // 4. Rotate by slingRot = -armAngle * 0.45
-        // 5. Offset by (-32, 32) (ropeLength & pattern offset)
-        
-        const slingRot = -armAngle * 0.45;
-        
-        // Offset of rope end from arm tip (rotated by slingRot)
-        const rx = -32, ry = 32;
-        const rotRx = rx * Math.cos(slingRot) - ry * Math.sin(slingRot);
-        const rotRy = rx * Math.sin(slingRot) + ry * Math.cos(slingRot);
-        
-        // Arm tip relative to pivot (at armAngle)
-        const armTipRelX = -160 * Math.cos(armAngle);
-        const armTipRelY = -160 * Math.sin(armAngle);
-        
-        // Final pixel coordinates
-        // Note: rotRx/Ry are in arm-local space, need to be rotated by armAngle too?
-        // Actually, Canvas logic is: translate(px, py) -> rotate(armAngle) -> translate(-160, 0) -> rotate(slingRot) -> translate(-32, 32)
-        // So the second transformation is nested.
-        
-        // Local position of sling tip after all ARM-centric steps:
-        const localSlingX = -160 + rotRx;
-        const localSlingY = 0 + rotRy;
-        
-        // Now rotate THIS whole vector by the arm's base rotation
-        const finalRelX = localSlingX * Math.cos(armAngle) - localSlingY * Math.sin(armAngle);
-        const finalRelY = localSlingX * Math.sin(armAngle) + localSlingY * Math.cos(armAngle);
-        
-        return { x: px + finalRelX, y: py + finalRelY };
-    }
-
-    function update(dt) {
-        state.time += dt;
-
-        if (state.mode === 'MOVE') {
-            state.x += 0.8; state.wheelAngle += 0.03;
-            if (state.x > W + 200) state.x = -200;
-            if (Math.random() < 0.22) createDust(state.x - 70, groundY, -0.4, -0.6);
-        } else if (state.mode === 'RETREAT') {
-            state.x -= 0.6; state.wheelAngle -= 0.025;
-            if (state.x < -200) state.x = W + 200;
-            if (Math.random() < 0.18) createDust(state.x + 80, groundY, 0.4, -0.5);
-        }
-
-        const px = state.x + 40;
-        const py = groundY - 140;
-
-        // HIGH SPEED DOWNWARD LAUNCH
-        const launchVx = 22.0;
-        const launchVy = 11.5;
-        const gravity = 0.35;
-
-        state.predictionPoints = [];
-        if (state.attackPhase === 'CHARGING') {
-            const tip = getSlingTip(px, py, -1.0);
-            let tx = tip.x; let ty = tip.y;
-            let tvx = launchVx; let tvy = launchVy;
-            for(let i=0; i<40; i++) {
-                state.predictionPoints.push({x: tx, y: ty});
-                tx += tvx; ty += tvy; tvy += gravity;
-                if (ty > groundY) break;
+        const colors = {
+            wood: '#4e2f15',
+            accent: '#d4b798',
+            metal: '#333',
+            soldier: {
+                legs: '#44301c',
+                tunic: '#604622',
+                vest: '#7f6034',
+                skin: '#f2c6a3',
+                helmet: '#4e6f33',
+                hair: '#442211'
             }
-        }
+        };
 
-        if (state.attackPhase === 'COCKING') {
-            state.attackProgress += 0.008;
-            state.armAngle = -0.5 - state.attackProgress * 0.5; 
-            if (state.attackProgress >= 1) { state.attackPhase = 'CHARGING'; state.attackProgress = 0; }
-        } else if (state.attackPhase === 'CHARGING') {
-            state.attackProgress += 0.02;
-            state.armAngle = -1.0 + Math.sin(state.time * 25) * 0.03;
-            if (state.attackProgress >= 1) { state.attackPhase = 'RELEASE'; state.attackProgress = 0; }
-        } else if (state.attackPhase === 'RELEASE') {
-            state.armAngle += 0.18; 
-            if (state.armAngle >= 2.65) { // DELAYED RELEASE FOR DOWNWARD WHIP
-                state.attackPhase = 'FOLLOW_THROUGH';
-                const tip = getSlingTip(px, py, state.armAngle);
-                state.projectile = { x: tip.x, y: tip.y, vx: launchVx, vy: launchVy, rot: 0, rolling: false, dustTimer: 0 };
+        let state = {
+            mode: 'IDLE',
+            x: 430,
+            wheelAngle: 0,
+            armAngle: -0.5,
+            attackPhase: 'IDLE',
+            attackProgress: 0,
+            projectile: null,
+            particles: [],
+            time: 0
+        };
+
+        function setMode(mode) {
+            state.mode = mode;
+            if (mode === 'ATTACK') {
+                state.attackPhase = 'COCKING';
+                state.attackProgress = 0;
+                state.projectile = null;
             }
-        } else if (state.attackPhase === 'FOLLOW_THROUGH') {
-            state.armAngle -= 0.03;
-            if (state.armAngle <= -0.5) { state.armAngle = -0.5; state.attackPhase = 'IDLE'; state.mode = 'IDLE'; }
+            document.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+            if (mode === 'IDLE') document.getElementById('btnIdle').classList.add('active');
+            if (mode === 'MOVE') document.getElementById('btnMove').classList.add('active');
+            if (mode === 'RETREAT') document.getElementById('btnRetreat').classList.add('active');
+            if (mode === 'ATTACK') document.getElementById('btnFire').classList.add('active');
         }
 
-        if (state.projectile) {
-            const p = state.projectile;
-            if (!p.rolling) {
-                p.x += p.vx; p.y += p.vy; p.vy += gravity; p.rot += 0.12;
-                if (p.y >= groundY - 18) {
-                    p.y = groundY - 18; 
-                    p.vy = -p.vy * 0.15; // HEAVY DAMPING ON IMPACT
-                    p.vx *= 0.92;
-                    if (Math.abs(p.vy) < 1.5) { p.rolling = true; p.vy = 0; }
-                    createDust(p.x, groundY, 0, -2, '#777', 1.2);
-                }
-            } else {
-                p.x += p.vx; p.vx *= 0.985; p.rot += p.vx * 0.06;
-                if (Math.abs(p.vx) > 0.4) {
-                    p.dustTimer += dt;
-                    if (p.dustTimer > 0.08) { p.dustTimer = 0; createDust(p.x, groundY, 0, -0.8, 'rgba(120,120,120,0.3)'); }
-                } else p.vx = 0;
-            }
-        }
-        state.particles.forEach((p, i) => {
-            p.x += p.vx; p.y += p.vy; p.life -= 0.025;
-            if (p.life <= 0) state.particles.splice(i, 1);
-        });
-    }
-
-    function draw() {
-        ctx.clearRect(0,0,W,H);
-        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-        ctx.beginPath(); ctx.moveTo(0, groundY); ctx.lineTo(W, groundY); ctx.stroke();
-
-        if (state.predictionPoints && state.predictionPoints.length > 0) {
-            ctx.setLineDash([6, 6]); ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1.5;
-            ctx.beginPath(); ctx.moveTo(state.predictionPoints[0].x, state.predictionPoints[0].y);
-            for(let p of state.predictionPoints) ctx.lineTo(p.x, p.y);
-            ctx.stroke(); ctx.setLineDash([]);
+        function createDust(x, y, vx, vy, color = 'rgba(255,255,255,0.2)', life = 1.0) {
+            state.particles.push({ x, y, vx, vy, life, color });
         }
 
-        const px = state.x + 40; 
-        const py = groundY - 140;
+        function drawSoldier(sx, sy, mode, time) {
+            const sx_scaled = sx;
+            const sy_scaled = sy - 58;
+            const bob = (mode === 'MOVE' || mode === 'RETREAT') ? Math.abs(Math.sin(time * 12)) * 3 : 0;
 
-        ctx.strokeStyle = colors.wood; ctx.lineWidth = 10;
-        ctx.beginPath(); ctx.moveTo(state.x - 70, groundY - 50); ctx.lineTo(state.x - 100, groundY - 50); ctx.stroke();
-        drawSoldier(state.x - 110, groundY, state.mode, state.time);
-
-        function drawWheel(wx, wy) {
-            ctx.save(); ctx.translate(wx, wy); ctx.rotate(state.wheelAngle);
-            ctx.strokeStyle = colors.wood; ctx.lineWidth = 6;
-            ctx.beginPath(); ctx.arc(0,0, 18, 0, Math.PI*2); ctx.stroke();
-            for(let i=0; i<6; i++) {
-                ctx.rotate(Math.PI/3); ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(18,0); ctx.stroke();
-            }
-            ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(0,0,4,0,Math.PI*2); ctx.fill(); ctx.restore();
-        }
-        drawWheel(state.x - 60, groundY - 15); drawWheel(state.x + 70, groundY - 15);
-
-        ctx.strokeStyle = colors.wood; ctx.lineWidth = 14; 
-        ctx.beginPath(); ctx.moveTo(state.x - 75, groundY - 20); ctx.lineTo(px, py); ctx.lineTo(state.x + 95, groundY - 20); ctx.stroke();
-        ctx.lineWidth = 8; ctx.beginPath(); ctx.moveTo(state.x - 50, groundY - 65); ctx.lineTo(state.x + 80, groundY - 65); ctx.stroke();
-
-        ctx.save();
-        ctx.translate(px, py);
-        ctx.rotate(state.armAngle);
-        
-        ctx.strokeStyle = colors.metal; ctx.lineWidth = 12; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(60, 0); ctx.stroke(); 
-        ctx.save();
-        ctx.translate(55, 0); ctx.rotate(-state.armAngle + Math.sin(state.time * 6)*0.12);
-        ctx.fillStyle = '#a00'; ctx.fillRect(-22, 0, 44, 48); 
-        ctx.strokeStyle = '#000'; ctx.lineWidth = 2.5; ctx.strokeRect(-22, 0, 44, 48);
-        ctx.fillStyle = '#333'; ctx.fillRect(-14, 8, 28, 32);
-        ctx.restore();
-
-        ctx.strokeStyle = colors.wood; ctx.lineWidth = 10; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(-160, 0); ctx.stroke(); 
-
-        if (!state.projectile && state.attackPhase !== 'FOLLOW_THROUGH') {
             ctx.save();
-            ctx.translate(-160, 0); 
-            ctx.rotate(-state.armAngle * 0.45);
-            ctx.strokeStyle = colors.accent; ctx.lineWidth = 1.5;
-            ctx.beginPath(); ctx.moveTo(0,-2); ctx.lineTo(-32, 32); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(0,2); ctx.lineTo(-32, 32); ctx.stroke();
-            ctx.translate(-32, 32);
-            ctx.rotate(0.8);
-            ctx.fillStyle = '#4a2c1a'; ctx.beginPath(); ctx.ellipse(0, 0, 16, 9, 0, 0, Math.PI*2); ctx.fill();
-            ctx.strokeStyle = '#221100'; ctx.lineWidth = 2; ctx.stroke();
-            ctx.fillStyle = '#666'; ctx.beginPath(); ctx.arc(0, 0, 16, 0, Math.PI*2); ctx.fill();
+            ctx.translate(sx_scaled, sy_scaled - bob);
+            if (mode === 'MOVE') ctx.rotate(0.35);
+            else if (mode === 'RETREAT') { ctx.rotate(-0.15); ctx.translate(-5, 5); }
+
+            const ls = (mode === 'MOVE' || mode === 'RETREAT') ? Math.sin(time * 12) * 6 : 0;
+            ctx.fillStyle = colors.soldier.legs;
+            ctx.fillRect(6 - ls, 42, 7, 16); ctx.fillRect(17 + ls, 42, 7, 16);
+            ctx.fillStyle = colors.soldier.tunic;
+            ctx.beginPath();
+            ctx.moveTo(4, 16); ctx.lineTo(26, 16); ctx.lineTo(30, 40); ctx.lineTo(24, 44); ctx.lineTo(6, 44); ctx.lineTo(0, 40); ctx.closePath();
+            ctx.fill();
+            ctx.fillStyle = colors.soldier.vest;
+            ctx.beginPath();
+            ctx.moveTo(11, 16); ctx.lineTo(19, 16); ctx.lineTo(22, 41); ctx.lineTo(8, 41); ctx.closePath();
+            ctx.fill();
+            ctx.fillStyle = colors.soldier.skin; ctx.fillRect(12, 12, 6, 5);
+            ctx.beginPath(); ctx.ellipse(15, 2, 11, 12, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = colors.soldier.helmet;
+            ctx.beginPath();
+            ctx.moveTo(6, 0); ctx.quadraticCurveTo(8, -11, 15, -12); ctx.quadraticCurveTo(24, -11, 25, 2); ctx.lineTo(24, 5); ctx.lineTo(6, 5); ctx.closePath();
+            ctx.fill();
+            ctx.strokeStyle = colors.soldier.tunic; ctx.lineWidth = 4; ctx.lineCap = 'round';
+            ctx.beginPath();
+            if (mode === 'MOVE') { ctx.moveTo(25, 22); ctx.lineTo(55, 22); }
+            else if (mode === 'RETREAT') { ctx.moveTo(25, 25); ctx.lineTo(50, 25); }
+            else { ctx.moveTo(25, 22); ctx.lineTo(40, 35); }
+            ctx.stroke();
             ctx.restore();
         }
-        ctx.restore();
 
-        ctx.fillStyle = colors.accent; ctx.beginPath(); ctx.arc(px,py,14,0,Math.PI*2); ctx.fill();
-        ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(px,py,6,0,Math.PI*2); ctx.fill();
+        function getSlingTip(px, py, armAngle) {
+            // MATCHING TRANSFORMATIONS IN DRAW():
+            // 1. Pivot (px, py) 
+            // 2. Rotate by armAngle
+            // 3. Translate by -160 (armLength)
+            // 4. Rotate by slingRot = -armAngle * 0.45
+            // 5. Offset by (-32, 32) (ropeLength & pattern offset)
 
-        if (state.projectile) {
-            const p = state.projectile;
-            ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
-            ctx.fillStyle = '#555'; ctx.shadowBlur = 10; ctx.shadowColor = 'rgba(0,0,0,0.5)';
-            ctx.beginPath(); ctx.arc(0,0, 18, 0, Math.PI*2); ctx.fill();
-            ctx.strokeStyle = '#333'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(-12, -6); ctx.lineTo(12, 6); ctx.stroke();
-            ctx.restore();
+            const slingRot = -armAngle * 0.45;
+
+            // Offset of rope end from arm tip (rotated by slingRot)
+            const rx = -32, ry = 32;
+            const rotRx = rx * Math.cos(slingRot) - ry * Math.sin(slingRot);
+            const rotRy = rx * Math.sin(slingRot) + ry * Math.cos(slingRot);
+
+            // Arm tip relative to pivot (at armAngle)
+            const armTipRelX = -160 * Math.cos(armAngle);
+            const armTipRelY = -160 * Math.sin(armAngle);
+
+            // Final pixel coordinates
+            // Note: rotRx/Ry are in arm-local space, need to be rotated by armAngle too?
+            // Actually, Canvas logic is: translate(px, py) -> rotate(armAngle) -> translate(-160, 0) -> rotate(slingRot) -> translate(-32, 32)
+            // So the second transformation is nested.
+
+            // Local position of sling tip after all ARM-centric steps:
+            const localSlingX = -160 + rotRx;
+            const localSlingY = 0 + rotRy;
+
+            // Now rotate THIS whole vector by the arm's base rotation
+            const finalRelX = localSlingX * Math.cos(armAngle) - localSlingY * Math.sin(armAngle);
+            const finalRelY = localSlingX * Math.sin(armAngle) + localSlingY * Math.cos(armAngle);
+
+            return { x: px + finalRelX, y: py + finalRelY };
         }
 
-        state.particles.forEach(p => {
-            ctx.globalAlpha = p.life; ctx.fillStyle = p.color;
-            ctx.beginPath(); ctx.arc(p.x, p.y, 4.5, 0, Math.PI*2); ctx.fill();
-        });
-        ctx.globalAlpha = 1.0;
-    }
+        function update(dt) {
+            state.time += dt;
 
-    let lastTime = 0;
-    function loop(now) {
-        const dt = (now - lastTime) / 1000; lastTime = now;
-        if (dt < 0.1) { update(dt); draw(); }
+            if (state.mode === 'MOVE') {
+                state.x += 0.8; state.wheelAngle += 0.03;
+                if (state.x > W + 200) state.x = -200;
+                if (Math.random() < 0.22) createDust(state.x - 70, groundY, -0.4, -0.6);
+            } else if (state.mode === 'RETREAT') {
+                state.x -= 0.6; state.wheelAngle -= 0.025;
+                if (state.x < -200) state.x = W + 200;
+                if (Math.random() < 0.18) createDust(state.x + 80, groundY, 0.4, -0.5);
+            }
+
+            const px = state.x + 40;
+            const py = groundY - 140;
+
+            // HIGH SPEED DOWNWARD LAUNCH
+            const launchVx = 22.0;
+            const launchVy = 11.5;
+            const gravity = 0.35;
+
+            state.predictionPoints = [];
+            if (state.attackPhase === 'CHARGING') {
+                const tip = getSlingTip(px, py, -1.0);
+                let tx = tip.x; let ty = tip.y;
+                let tvx = launchVx; let tvy = launchVy;
+                for (let i = 0; i < 40; i++) {
+                    state.predictionPoints.push({ x: tx, y: ty });
+                    tx += tvx; ty += tvy; tvy += gravity;
+                    if (ty > groundY) break;
+                }
+            }
+
+            if (state.attackPhase === 'COCKING') {
+                state.attackProgress += 0.008;
+                state.armAngle = -0.5 - state.attackProgress * 0.5;
+                if (state.attackProgress >= 1) { state.attackPhase = 'CHARGING'; state.attackProgress = 0; }
+            } else if (state.attackPhase === 'CHARGING') {
+                state.attackProgress += 0.02;
+                state.armAngle = -1.0 + Math.sin(state.time * 25) * 0.03;
+                if (state.attackProgress >= 1) { state.attackPhase = 'RELEASE'; state.attackProgress = 0; }
+            } else if (state.attackPhase === 'RELEASE') {
+                state.armAngle += 0.18;
+                if (state.armAngle >= 2.65) { // DELAYED RELEASE FOR DOWNWARD WHIP
+                    state.attackPhase = 'FOLLOW_THROUGH';
+                    const tip = getSlingTip(px, py, state.armAngle);
+                    state.projectile = { x: tip.x, y: tip.y, vx: launchVx, vy: launchVy, rot: 0, rolling: false, dustTimer: 0 };
+                }
+            } else if (state.attackPhase === 'FOLLOW_THROUGH') {
+                state.armAngle -= 0.03;
+                if (state.armAngle <= -0.5) { state.armAngle = -0.5; state.attackPhase = 'IDLE'; state.mode = 'IDLE'; }
+            }
+
+            if (state.projectile) {
+                const p = state.projectile;
+                if (!p.rolling) {
+                    p.x += p.vx; p.y += p.vy; p.vy += gravity; p.rot += 0.12;
+                    if (p.y >= groundY - 18) {
+                        p.y = groundY - 18;
+                        p.vy = -p.vy * 0.15; // HEAVY DAMPING ON IMPACT
+                        p.vx *= 0.92;
+                        if (Math.abs(p.vy) < 1.5) { p.rolling = true; p.vy = 0; }
+                        createDust(p.x, groundY, 0, -2, '#777', 1.2);
+                    }
+                } else {
+                    p.x += p.vx; p.vx *= 0.985; p.rot += p.vx * 0.06;
+                    if (Math.abs(p.vx) > 0.4) {
+                        p.dustTimer += dt;
+                        if (p.dustTimer > 0.08) { p.dustTimer = 0; createDust(p.x, groundY, 0, -0.8, 'rgba(120,120,120,0.3)'); }
+                    } else p.vx = 0;
+                }
+            }
+            state.particles.forEach((p, i) => {
+                p.x += p.vx; p.y += p.vy; p.life -= 0.025;
+                if (p.life <= 0) state.particles.splice(i, 1);
+            });
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, W, H);
+            ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+            ctx.beginPath(); ctx.moveTo(0, groundY); ctx.lineTo(W, groundY); ctx.stroke();
+
+            if (state.predictionPoints && state.predictionPoints.length > 0) {
+                ctx.setLineDash([6, 6]); ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1.5;
+                ctx.beginPath(); ctx.moveTo(state.predictionPoints[0].x, state.predictionPoints[0].y);
+                for (let p of state.predictionPoints) ctx.lineTo(p.x, p.y);
+                ctx.stroke(); ctx.setLineDash([]);
+            }
+
+            const px = state.x + 40;
+            const py = groundY - 140;
+
+            ctx.strokeStyle = colors.wood; ctx.lineWidth = 10;
+            ctx.beginPath(); ctx.moveTo(state.x - 70, groundY - 50); ctx.lineTo(state.x - 100, groundY - 50); ctx.stroke();
+            drawSoldier(state.x - 110, groundY, state.mode, state.time);
+
+            function drawWheel(wx, wy) {
+                ctx.save(); ctx.translate(wx, wy); ctx.rotate(state.wheelAngle);
+                ctx.strokeStyle = colors.wood; ctx.lineWidth = 6;
+                ctx.beginPath(); ctx.arc(0, 0, 18, 0, Math.PI * 2); ctx.stroke();
+                for (let i = 0; i < 6; i++) {
+                    ctx.rotate(Math.PI / 3); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(18, 0); ctx.stroke();
+                }
+                ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+            }
+            drawWheel(state.x - 60, groundY - 15); drawWheel(state.x + 70, groundY - 15);
+
+            ctx.strokeStyle = colors.wood; ctx.lineWidth = 14;
+            ctx.beginPath(); ctx.moveTo(state.x - 75, groundY - 20); ctx.lineTo(px, py); ctx.lineTo(state.x + 95, groundY - 20); ctx.stroke();
+            ctx.lineWidth = 8; ctx.beginPath(); ctx.moveTo(state.x - 50, groundY - 65); ctx.lineTo(state.x + 80, groundY - 65); ctx.stroke();
+
+            ctx.save();
+            ctx.translate(px, py);
+            ctx.rotate(state.armAngle);
+
+            ctx.strokeStyle = colors.metal; ctx.lineWidth = 12; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(60, 0); ctx.stroke();
+            ctx.save();
+            ctx.translate(55, 0); ctx.rotate(-state.armAngle + Math.sin(state.time * 6) * 0.12);
+            ctx.fillStyle = '#a00'; ctx.fillRect(-22, 0, 44, 48);
+            ctx.strokeStyle = '#000'; ctx.lineWidth = 2.5; ctx.strokeRect(-22, 0, 44, 48);
+            ctx.fillStyle = '#333'; ctx.fillRect(-14, 8, 28, 32);
+            ctx.restore();
+
+            ctx.strokeStyle = colors.wood; ctx.lineWidth = 10; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-160, 0); ctx.stroke();
+
+            if (!state.projectile && state.attackPhase !== 'FOLLOW_THROUGH') {
+                ctx.save();
+                ctx.translate(-160, 0);
+                ctx.rotate(-state.armAngle * 0.45);
+                ctx.strokeStyle = colors.accent; ctx.lineWidth = 1.5;
+                ctx.beginPath(); ctx.moveTo(0, -2); ctx.lineTo(-32, 32); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, 2); ctx.lineTo(-32, 32); ctx.stroke();
+                ctx.translate(-32, 32);
+                ctx.rotate(0.8);
+                ctx.fillStyle = '#4a2c1a'; ctx.beginPath(); ctx.ellipse(0, 0, 16, 9, 0, 0, Math.PI * 2); ctx.fill();
+                ctx.strokeStyle = '#221100'; ctx.lineWidth = 2; ctx.stroke();
+                ctx.fillStyle = '#666'; ctx.beginPath(); ctx.arc(0, 0, 16, 0, Math.PI * 2); ctx.fill();
+                ctx.restore();
+            }
+            ctx.restore();
+
+            ctx.fillStyle = colors.accent; ctx.beginPath(); ctx.arc(px, py, 14, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(px, py, 6, 0, Math.PI * 2); ctx.fill();
+
+            if (state.projectile) {
+                const p = state.projectile;
+                ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+                ctx.fillStyle = '#555'; ctx.shadowBlur = 10; ctx.shadowColor = 'rgba(0,0,0,0.5)';
+                ctx.beginPath(); ctx.arc(0, 0, 18, 0, Math.PI * 2); ctx.fill();
+                ctx.strokeStyle = '#333'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(-12, -6); ctx.lineTo(12, 6); ctx.stroke();
+                ctx.restore();
+            }
+
+            state.particles.forEach(p => {
+                ctx.globalAlpha = p.life; ctx.fillStyle = p.color;
+                ctx.beginPath(); ctx.arc(p.x, p.y, 4.5, 0, Math.PI * 2); ctx.fill();
+            });
+            ctx.globalAlpha = 1.0;
+        }
+
+        let lastTime = 0;
+        function loop(now) {
+            const dt = (now - lastTime) / 1000; lastTime = now;
+            if (dt < 0.1) { update(dt); draw(); }
+            requestAnimationFrame(loop);
+        }
         requestAnimationFrame(loop);
-    }
-    requestAnimationFrame(loop);
-</script>
+    </script>
 
 </body>
+
 </html>
