@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pocket Kingdom — Build small, Dream big.</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #050508;
+    --surface: #0c0c14;
+    --raised: #12121e;
+    --border: #1a1a2a;
+    --text: #e0e0e0;
+    --sub: #777788;
+    --muted: #444455;
+    --gold: #ffd700;
+    --gold-dim: #b89a00;
+    --cyan: #00f5ff;
+    --fire: #ff6600;
+    --blood: #cc2200;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'Outfit', sans-serif; font-weight: 400;
+    line-height: 1.5; overflow-x: hidden;
+  }
+  a { color: inherit; text-decoration: none; }
+  img, canvas { display: block; max-width: 100%; }
+
+  /* ─── Utility ─── */
+  .container { max-width: 1200px; margin: 0 auto; padding: 0 32px; }
+  .eyebrow {
+    font-size: 11px; font-weight: 600; color: var(--cyan);
+    letter-spacing: 0.18em; text-transform: uppercase;
+    padding-left: 14px; border-left: 3px solid var(--cyan);
+    display: inline-block;
+  }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 14px 32px; font-family: inherit; font-size: 14px;
+    font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase;
+    border: none; border-radius: 10px; cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .btn-primary { background: var(--gold); color: #000; }
+  .btn-primary:hover { transform: scale(1.04); box-shadow: 0 0 24px rgba(255,215,0,0.35); }
+  .btn-ghost {
+    background: transparent; color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-ghost:hover { border-color: var(--cyan); color: var(--cyan); }
+
+  /* ─── Nav ─── */
+  .nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+    backdrop-filter: blur(12px); background: rgba(5,5,8,0.6);
+    border-bottom: 1px solid transparent;
+    transition: background 0.3s, border-color 0.3s;
+  }
+  .nav.scrolled { background: rgba(5,5,8,0.9); border-bottom-color: var(--border); }
+  .nav-inner {
+    display: flex; align-items: center; gap: 32px;
+    padding: 16px 32px; max-width: 1300px; margin: 0 auto;
+  }
+  .logo-mark { display: flex; align-items: center; gap: 10px; }
+  .logo-mark .crown { color: var(--gold); font-size: 20px; line-height: 1; }
+  .logo-mark .text-pocket { font-size: 11px; color: rgba(255,255,255,0.55); letter-spacing: 0.2em; font-weight: 300; }
+  .logo-mark .text-kingdom { font-size: 18px; color: var(--gold); font-weight: 800; letter-spacing: -0.01em; line-height: 1; }
+  .logo-mark .stacked { display: flex; flex-direction: column; gap: 1px; line-height: 1; }
+  .nav-links { display: flex; gap: 28px; margin-left: auto; }
+  .nav-links a {
+    font-size: 12px; font-weight: 600; color: var(--sub);
+    letter-spacing: 0.1em; text-transform: uppercase;
+    transition: color 0.2s;
+  }
+  .nav-links a:hover { color: var(--cyan); }
+  .nav-cta { margin-left: 24px; }
+  .nav-cta .btn { padding: 9px 20px; font-size: 11px; }
+  @media (max-width: 780px) {
+    .nav-links { display: none; }
+  }
+
+  /* ─── Hero ─── */
+  .hero {
+    position: relative; min-height: 100vh;
+    display: flex; flex-direction: column; justify-content: center;
+    padding: 120px 0 80px;
+    overflow: hidden;
+  }
+  #heroCanvas {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    z-index: 0;
+  }
+  .hero-vignette {
+    position: absolute; inset: 0; z-index: 1;
+    background: radial-gradient(ellipse at center, transparent 30%, rgba(5,5,8,0.75) 100%);
+  }
+  .hero-inner { position: relative; z-index: 2; }
+  .hero-content {
+    max-width: 680px;
+  }
+  .hero-tag {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 14px; border-radius: 999px;
+    background: rgba(0,245,255,0.08); border: 1px solid rgba(0,245,255,0.25);
+    font-size: 11px; font-weight: 600; color: var(--cyan);
+    letter-spacing: 0.15em; text-transform: uppercase;
+    margin-bottom: 24px;
+  }
+  .hero-tag::before {
+    content: ''; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--cyan); box-shadow: 0 0 8px var(--cyan);
+  }
+  .hero-title {
+    font-size: clamp(48px, 9vw, 112px);
+    font-weight: 800; line-height: 0.95;
+    letter-spacing: -0.03em;
+    margin-bottom: 18px;
+    color: var(--gold);
+    text-shadow: 0 0 60px rgba(255,215,0,0.25);
+  }
+  .hero-title .light { color: rgba(255,255,255,0.55); font-weight: 300; }
+  .hero-sub {
+    font-size: clamp(16px, 2vw, 20px);
+    color: rgba(255,255,255,0.7); max-width: 540px;
+    margin-bottom: 36px; font-weight: 300;
+  }
+  .hero-cta { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-bottom: 40px; }
+  .hero-stats {
+    display: flex; gap: 32px; flex-wrap: wrap;
+    padding-top: 24px; border-top: 1px solid var(--border);
+  }
+  .stat-label { font-size: 10px; color: var(--sub); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 4px; }
+  .stat-value { font-size: 20px; font-weight: 800; color: var(--text); font-family: 'JetBrains Mono', monospace; }
+  .stat-value .unit { color: var(--gold); font-size: 14px; margin-left: 4px; }
+
+  /* ─── Section chrome ─── */
+  .section { padding: 120px 0; position: relative; }
+  .section-head { margin-bottom: 56px; max-width: 720px; }
+  .section-head h2 {
+    font-size: clamp(32px, 5vw, 56px);
+    font-weight: 800; letter-spacing: -0.02em; line-height: 1;
+    margin-top: 16px; margin-bottom: 16px;
+    color: var(--text);
+    text-wrap: balance;
+  }
+  .section-head h2 .accent { color: var(--gold); }
+  .section-head p {
+    font-size: 17px; color: var(--sub); font-weight: 300; max-width: 580px;
+    text-wrap: pretty;
+  }
+
+  /* ─── Features grid ─── */
+  .features-grid {
+    display: grid; gap: 16px;
+    grid-template-columns: repeat(12, 1fr);
+  }
+  .feature {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 32px; position: relative;
+    transition: border-color 0.25s, transform 0.25s;
+    overflow: hidden;
+  }
+  .feature:hover { border-color: rgba(0,245,255,0.4); transform: translateY(-3px); }
+  .feature-big { grid-column: span 7; min-height: 380px; display: flex; flex-direction: column; }
+  .feature-a { grid-column: span 5; }
+  .feature-b { grid-column: span 4; }
+  .feature-c { grid-column: span 4; }
+  .feature-d { grid-column: span 4; }
+  @media (max-width: 900px) {
+    .feature-big, .feature-a, .feature-b, .feature-c, .feature-d { grid-column: span 12; }
+  }
+  .feature-icon {
+    width: 44px; height: 44px; border-radius: 10px;
+    background: rgba(255,215,0,0.1); color: var(--gold);
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 20px; font-size: 22px;
+  }
+  .feature-icon.cyan { background: rgba(0,245,255,0.1); color: var(--cyan); }
+  .feature-icon.fire { background: rgba(255,102,0,0.1); color: var(--fire); }
+  .feature-icon.blood { background: rgba(204,34,0,0.1); color: var(--blood); }
+  .feature h3 {
+    font-size: 20px; font-weight: 600; letter-spacing: -0.01em;
+    margin-bottom: 10px; color: var(--text);
+  }
+  .feature p { font-size: 14px; color: var(--sub); font-weight: 300; line-height: 1.6; }
+  .feature-big .feature-visual {
+    margin-top: auto; height: 180px;
+    background: linear-gradient(to bottom, #1e3c72 0%, #2a5298 60%, #1e1104 60%, #1e1104 100%);
+    border-radius: 10px; position: relative; overflow: hidden;
+    margin-left: -12px; margin-right: -12px; margin-bottom: -12px;
+  }
+
+  /* ─── Gameplay loop ─── */
+  .loop-wrap { margin-top: 48px; }
+  .loop-row {
+    display: grid; grid-template-columns: 140px 1fr auto;
+    gap: 32px; align-items: center;
+    padding: 28px 0; border-bottom: 1px solid var(--border);
+  }
+  .loop-row:last-child { border-bottom: none; }
+  .loop-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 48px; font-weight: 700; color: var(--gold);
+    letter-spacing: -0.05em; line-height: 1;
+    opacity: 0.9;
+  }
+  .loop-num .slash { color: var(--muted); }
+  .loop-text h4 { font-size: 22px; font-weight: 600; margin-bottom: 6px; letter-spacing: -0.01em; }
+  .loop-text p { font-size: 14px; color: var(--sub); font-weight: 300; max-width: 520px; }
+  .loop-arrow {
+    font-size: 24px; color: var(--muted);
+    transition: color 0.2s;
+  }
+  .loop-row:hover .loop-arrow { color: var(--cyan); }
+  @media (max-width: 720px) {
+    .loop-row { grid-template-columns: 80px 1fr; }
+    .loop-arrow { display: none; }
+    .loop-num { font-size: 36px; }
+  }
+
+  /* ─── Screenshots ─── */
+  .shots {
+    display: grid; grid-template-columns: repeat(12, 1fr);
+    gap: 16px;
+  }
+  .shot {
+    border-radius: 14px; overflow: hidden;
+    position: relative; aspect-ratio: 4/3;
+    background: var(--surface); border: 1px solid var(--border);
+  }
+  .shot img { width: 100%; height: 100%; object-fit: cover; }
+  .shot::after {
+    content: ''; position: absolute; inset: 0;
+    background: linear-gradient(to top, rgba(5,5,8,0.85) 0%, transparent 55%);
+    pointer-events: none;
+  }
+  .shot-caption {
+    position: absolute; left: 16px; bottom: 16px; z-index: 2;
+    font-size: 12px; font-weight: 600; color: var(--text);
+    letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .shot-caption small { display: block; color: var(--cyan); font-size: 10px; font-weight: 400; margin-top: 2px; letter-spacing: 0.15em; }
+  .shot-a { grid-column: span 7; }
+  .shot-b { grid-column: span 5; }
+  .shot-c { grid-column: span 4; }
+  .shot-d { grid-column: span 4; }
+  .shot-e { grid-column: span 4; }
+  @media (max-width: 900px) {
+    .shot-a, .shot-b, .shot-c, .shot-d, .shot-e { grid-column: span 12; }
+  }
+
+  /* ─── Story / About ─── */
+  .story {
+    position: relative; padding: 140px 0;
+    background: linear-gradient(180deg, transparent 0%, rgba(30,60,114,0.08) 50%, transparent 100%);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+  .story-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 72px; align-items: center;
+  }
+  @media (max-width: 900px) { .story-grid { grid-template-columns: 1fr; gap: 48px; } }
+  .story-quote {
+    font-size: clamp(24px, 3vw, 34px);
+    font-weight: 300; line-height: 1.3; letter-spacing: -0.01em;
+    color: var(--text); margin-bottom: 24px;
+    text-wrap: pretty;
+  }
+  .story-quote em { color: var(--gold); font-style: normal; font-weight: 600; }
+  .story-meta { display: flex; gap: 18px; font-size: 11px; color: var(--muted); letter-spacing: 0.12em; text-transform: uppercase; font-family: 'JetBrains Mono', monospace; }
+  .story-visual {
+    aspect-ratio: 1/1; max-width: 420px; margin: 0 auto;
+    position: relative;
+  }
+
+  /* ─── Controls showcase ─── */
+  .controls-showcase {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 20px; padding: 48px; margin-top: 48px;
+  }
+  @media (max-width: 780px) { .controls-showcase { grid-template-columns: 1fr; padding: 32px; } }
+  .keys-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; }
+  .key {
+    background: var(--raised); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px; text-align: center;
+    transition: border-color 0.2s, transform 0.15s;
+  }
+  .key:hover { border-color: var(--gold); transform: translateY(-2px); }
+  .key-cap {
+    display: inline-block; padding: 4px 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; font-weight: 700; color: var(--gold);
+    background: rgba(255,215,0,0.08); border: 1px solid rgba(255,215,0,0.25);
+    border-radius: 4px; margin-bottom: 8px;
+  }
+  .key-label { font-size: 10px; color: var(--sub); letter-spacing: 0.08em; text-transform: uppercase; }
+
+  /* ─── Final CTA ─── */
+  .cta-band {
+    padding: 120px 32px; text-align: center;
+    position: relative; overflow: hidden;
+  }
+  .cta-band::before {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(ellipse at center, rgba(255,215,0,0.08), transparent 70%);
+    pointer-events: none;
+  }
+  .cta-band h2 {
+    font-size: clamp(40px, 7vw, 88px); font-weight: 800;
+    letter-spacing: -0.03em; line-height: 0.95;
+    margin-bottom: 28px; color: var(--text);
+  }
+  .cta-band h2 .gold { color: var(--gold); text-shadow: 0 0 40px rgba(255,215,0,0.3); }
+  .cta-band p { font-size: 17px; color: var(--sub); max-width: 520px; margin: 0 auto 40px; font-weight: 300; }
+
+  /* ─── Footer ─── */
+  footer {
+    background: #030305; padding: 64px 32px 32px;
+    border-top: 1px solid var(--border);
+  }
+  .footer-grid {
+    display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 48px;
+    max-width: 1200px; margin: 0 auto;
+  }
+  @media (max-width: 720px) { .footer-grid { grid-template-columns: 1fr 1fr; } }
+  .footer-col h5 {
+    font-size: 11px; color: var(--sub); font-weight: 600;
+    letter-spacing: 0.15em; text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+  .footer-col a {
+    display: block; font-size: 13px; color: var(--text);
+    margin-bottom: 8px; font-weight: 400;
+    transition: color 0.2s;
+  }
+  .footer-col a:hover { color: var(--cyan); }
+  .footer-bottom {
+    max-width: 1200px; margin: 48px auto 0; padding-top: 24px;
+    border-top: 1px solid var(--border);
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 16px;
+    font-size: 11px; color: var(--muted); letter-spacing: 0.06em;
+    font-family: 'JetBrains Mono', monospace;
+  }
+</style>
+</head>
+<body>
+
+<!-- ─── Nav ─── -->
+<nav class="nav" id="nav">
+  <div class="nav-inner">
+    <a class="logo-mark" href="#">
+      <span class="crown">👑</span>
+      <div class="stacked">
+        <span class="text-pocket">POCKET</span>
+        <span class="text-kingdom">KINGDOM</span>
+      </div>
+    </a>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#loop">Gameplay</a>
+      <a href="#screenshots">Screenshots</a>
+      <a href="#story">About</a>
+    </div>
+    <div class="nav-cta">
+      <a class="btn btn-primary" href="ui_kits/pocket-kingdom/index.html">Play Now</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ─── Hero ─── -->
+<header class="hero">
+  <canvas id="heroCanvas"></canvas>
+  <div class="hero-vignette"></div>
+  <div class="container hero-inner">
+    <div class="hero-content">
+      <span class="hero-tag">Now in Open Alpha · HTML5 · Free to Play</span>
+      <h1 class="hero-title"><span class="light">Build small.</span><br>Dream big.</h1>
+      <p class="hero-sub">
+        A high-fidelity, 2D side-scrolling strategy RPG. Defend your outpost, grow
+        your economy, and survive the encroaching darkness — all rendered in real-time
+        from a single HTML file.
+      </p>
+      <div class="hero-cta">
+        <a class="btn btn-primary" href="ui_kits/pocket-kingdom/index.html">▶ Enter Kingdom</a>
+        <a class="btn btn-ghost" href="#features">Watch Gameplay</a>
+      </div>
+      <div class="hero-stats">
+        <div>
+          <div class="stat-label">Code size</div>
+          <div class="stat-value">238<span class="unit">KB</span></div>
+        </div>
+        <div>
+          <div class="stat-label">Dependencies</div>
+          <div class="stat-value">0<span class="unit">ZERO</span></div>
+        </div>
+        <div>
+          <div class="stat-label">Unique enemies</div>
+          <div class="stat-value">14<span class="unit">+</span></div>
+        </div>
+        <div>
+          <div class="stat-label">Build types</div>
+          <div class="stat-value">6<span class="unit">STRUCTURES</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ─── Features ─── -->
+<section class="section" id="features">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">The Core Pillars</span>
+      <h2>A <span class="accent">whole kingdom</span> in a single HTML file.</h2>
+      <p>Every sprite, enemy, and particle is drawn procedurally on canvas — no sprite sheets, no engine, no frameworks. Just raw JavaScript.</p>
+    </div>
+    <div class="features-grid">
+      <div class="feature feature-big">
+        <div class="feature-icon">⚔</div>
+        <h3>Four tiers of weaponry</h3>
+        <p>
+          Start with your fists. Earn an <strong style="color:var(--text)">Axe</strong>, forge a <strong style="color:var(--text)">Sword</strong>,
+          and unlock the legendary <strong style="color:var(--gold)">Flame Hammer</strong> —
+          a charged attack that unleashes fire particles and shakes the screen.
+        </p>
+        <div class="feature-visual" id="weaponVisual"></div>
+      </div>
+      <div class="feature feature-a">
+        <div class="feature-icon cyan">🏰</div>
+        <h3>Build, upgrade, defend</h3>
+        <p>Construct walls, farms, barracks, and forges. Hire soldiers and archers from a Refugee Camp. Upgrade your outpost from a lonely tower into a two-story fortress town.</p>
+      </div>
+      <div class="feature feature-b">
+        <div class="feature-icon blood">🌙</div>
+        <h3>Blood Moon waves</h3>
+        <p>When the moon turns red, enemy scavengers, archers, and — occasionally — a boss-tier Emerald Mecha Dragon descend from the void portal.</p>
+      </div>
+      <div class="feature feature-c">
+        <div class="feature-icon fire">🔥</div>
+        <h3>Real particle physics</h3>
+        <p>Fire embers, meteor trails, leaf drift, arrow tracers, and laser beams — every effect is a hand-tuned particle system running at 60fps.</p>
+      </div>
+      <div class="feature feature-d">
+        <div class="feature-icon cyan">📱</div>
+        <h3>Desktop &amp; mobile</h3>
+        <p>Full glassmorphic touch control overlay on mobile. WASD + mouse on desktop. One codebase, zero compromises.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Gameplay loop ─── -->
+<section class="section" id="loop" style="padding-top:40px">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">The Gameplay Loop</span>
+      <h2>A rhythm you'll learn in a minute. <span class="accent">Master in hours.</span></h2>
+      <p>Day and night cycle. Gather, spend, fight, rebuild. Every wave ratchets the tension — every sunrise rewards the careful.</p>
+    </div>
+
+    <div class="loop-wrap">
+      <div class="loop-row">
+        <div class="loop-num">01<span class="slash">/</span></div>
+        <div class="loop-text">
+          <h4>Gather</h4>
+          <p>Chop trees for wood. Hire workers from the Refugee Camp. Watch ladybugs crawl over the flowers while the sun rises.</p>
+        </div>
+        <div class="loop-arrow">→</div>
+      </div>
+      <div class="loop-row">
+        <div class="loop-num">02<span class="slash">/</span></div>
+        <div class="loop-text">
+          <h4>Build</h4>
+          <p>Walls. Farms. Barracks. Shops. Each placement matters — your outpost's future silhouette depends on it.</p>
+        </div>
+        <div class="loop-arrow">→</div>
+      </div>
+      <div class="loop-row">
+        <div class="loop-num">03<span class="slash">/</span></div>
+        <div class="loop-text">
+          <h4>Forge</h4>
+          <p>Upgrade your weapon at the Forge. Hire soldiers. Recruit archers. Stockpile meat for dark nights.</p>
+        </div>
+        <div class="loop-arrow">→</div>
+      </div>
+      <div class="loop-row">
+        <div class="loop-num">04<span class="slash">/</span></div>
+        <div class="loop-text">
+          <h4>Survive</h4>
+          <p>A void portal opens. The blood moon rises. Hold the line, or lose everything you've built.</p>
+        </div>
+        <div class="loop-arrow">→</div>
+      </div>
+      <div class="loop-row">
+        <div class="loop-num">05<span class="slash">/</span></div>
+        <div class="loop-text">
+          <h4>Rebuild</h4>
+          <p>Dawn breaks. Count the dead. Rebuild what was lost. The next wave will be harder.</p>
+        </div>
+        <div class="loop-arrow" style="color:var(--gold)">↻</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Screenshots ─── -->
+<section class="section" id="screenshots" style="padding-top:40px">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">The Kingdom, Visualized</span>
+      <h2>Every building <span class="accent">drawn by hand</span> — in code.</h2>
+    </div>
+    <div class="shots">
+      <div class="shot shot-a">
+        <img src="assets/barracks.png" alt="Barracks">
+        <div class="shot-caption">Barracks<small>HIRE SOLDIERS · ARCHERS</small></div>
+      </div>
+      <div class="shot shot-b">
+        <img src="assets/refugee_camp.png" alt="Refugee Camp">
+        <div class="shot-caption">Refugee Camp<small>WORKERS · HUNTERS</small></div>
+      </div>
+      <div class="shot shot-c">
+        <img src="assets/resource_shop.png" alt="Resource Shop">
+        <div class="shot-caption">Resource Shop<small>WOOD · WHEAT · MEAT</small></div>
+      </div>
+      <div class="shot shot-d">
+        <img src="assets/weapon_shop.png" alt="The Forge">
+        <div class="shot-caption">The Forge<small>AXE → SWORD → HAMMER</small></div>
+      </div>
+      <div class="shot shot-e">
+        <div style="width:100%;height:100%;background:linear-gradient(180deg,#1e3c72 0%,#2a5298 55%,#1e1104 55%,#1e1104 100%);position:relative" id="dragonShot">
+          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:60px">🐉</div>
+        </div>
+        <div class="shot-caption">Emerald Mecha Dragon<small>BOSS · BLOOD MOON ENCOUNTER</small></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Story / About ─── -->
+<section class="story" id="story">
+  <div class="container">
+    <div class="story-grid">
+      <div>
+        <span class="eyebrow">The Philosophy</span>
+        <p class="story-quote" style="margin-top:20px">
+          “Pocket Kingdom is a <em>study in constraint</em> — what can one developer build
+          in a single HTML5 canvas with zero dependencies? Every pixel drawn is a tiny
+          act of defiance against the bloat of modern game development.”
+        </p>
+        <div class="story-meta">
+          <span>— Design Thesis</span>
+          <span>· 2024</span>
+          <span>· V1.4</span>
+        </div>
+      </div>
+      <div class="story-visual">
+        <canvas id="storyCanvas" width="420" height="420" style="width:100%;height:auto"></canvas>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Controls showcase ─── -->
+<section class="section" style="padding-top:80px">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">The Controls</span>
+      <h2>Simple enough to <span class="accent">pick up right now</span>.</h2>
+      <p>Every action is mapped to a single key. No menus to navigate mid-combat.</p>
+    </div>
+    <div class="controls-showcase">
+      <div>
+        <div style="font-size:11px;color:var(--cyan);letter-spacing:0.15em;text-transform:uppercase;font-weight:600;margin-bottom:16px">Desktop Keys</div>
+        <div class="keys-grid">
+          <div class="key"><span class="key-cap">WASD</span><div class="key-label">Move</div></div>
+          <div class="key"><span class="key-cap">E</span><div class="key-label">Action</div></div>
+          <div class="key"><span class="key-cap">SPACE</span><div class="key-label">Jump / Attack</div></div>
+          <div class="key"><span class="key-cap">R</span><div class="key-label">Follow</div></div>
+          <div class="key"><span class="key-cap">H</span><div class="key-label">Heal</div></div>
+          <div class="key"><span class="key-cap">B</span><div class="key-label">Build Wall</div></div>
+          <div class="key"><span class="key-cap">V</span><div class="key-label">Barrack</div></div>
+          <div class="key"><span class="key-cap">F</span><div class="key-label">Farm</div></div>
+          <div class="key"><span class="key-cap">1 2 3</span><div class="key-label">Hire / Buy</div></div>
+          <div class="key"><span class="key-cap">ESC</span><div class="key-label">Pause</div></div>
+        </div>
+      </div>
+      <div style="text-align:center">
+        <div style="font-size:11px;color:var(--cyan);letter-spacing:0.15em;text-transform:uppercase;font-weight:600;margin-bottom:16px">Mobile</div>
+        <div style="background:linear-gradient(135deg,#1e3c72,#2a5298);aspect-ratio:9/16;max-width:220px;margin:0 auto;border-radius:24px;position:relative;padding:20px;overflow:hidden">
+          <!-- Mini mobile preview -->
+          <div style="position:absolute;bottom:16px;left:16px;display:flex;gap:16px">
+            <div style="width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.25);display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff">←</div>
+            <div style="width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.25);display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff">→</div>
+          </div>
+          <div style="position:absolute;bottom:16px;right:16px;display:flex;gap:6px">
+            <div style="width:30px;height:30px;border-radius:8px;background:rgba(0,150,255,0.2);border:1px solid rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-size:8px;color:#fff;font-weight:600">ACT</div>
+            <div style="width:30px;height:30px;border-radius:8px;background:rgba(0,150,255,0.2);border:1px solid rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-size:8px;color:#fff;font-weight:600">HEAL</div>
+          </div>
+          <div style="position:absolute;top:20%;left:50%;transform:translateX(-50%);width:4px;height:4px;background:#fff;border-radius:50%;opacity:0.7"></div>
+          <div style="position:absolute;top:15%;left:30%;width:3px;height:3px;background:#fff;border-radius:50%;opacity:0.5"></div>
+          <div style="position:absolute;top:30%;left:70%;width:3px;height:3px;background:#fff;border-radius:50%;opacity:0.6"></div>
+          <div style="position:absolute;bottom:32%;left:0;right:0;height:32%;background:#1e1104"></div>
+        </div>
+        <div style="font-size:11px;color:var(--sub);margin-top:14px;letter-spacing:0.08em;text-transform:uppercase">Glassmorphic Touch Overlay</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Final CTA ─── -->
+<section class="cta-band">
+  <div class="container" style="position:relative">
+    <h2>Your outpost <span class="gold">awaits.</span></h2>
+    <p>No downloads. No signup. Just open the page, press ENTER KINGDOM, and start building. Free forever.</p>
+    <a class="btn btn-primary" href="ui_kits/pocket-kingdom/index.html" style="padding:18px 48px;font-size:15px">▶ Play Pocket Kingdom</a>
+    <div style="margin-top:20px;font-size:11px;color:var(--muted);letter-spacing:0.15em;text-transform:uppercase;font-family:'JetBrains Mono',monospace">
+      Runs in any browser · &lt; 1 MB total
+    </div>
+  </div>
+</section>
+
+<!-- ─── Footer ─── -->
+<footer>
+  <div class="footer-grid">
+    <div>
+      <div class="logo-mark" style="margin-bottom:16px">
+        <span class="crown">👑</span>
+        <div class="stacked">
+          <span class="text-pocket">POCKET</span>
+          <span class="text-kingdom">KINGDOM</span>
+        </div>
+      </div>
+      <p style="font-size:13px;color:var(--sub);font-weight:300;max-width:320px">A high-fidelity 2D strategy RPG built entirely with HTML5 Canvas and vanilla JavaScript. Built small. Dream big.</p>
+    </div>
+    <div class="footer-col">
+      <h5>Play</h5>
+      <a href="ui_kits/pocket-kingdom/index.html">Enter Kingdom</a>
+      <a href="#features">Features</a>
+      <a href="#loop">Gameplay</a>
+      <a href="#screenshots">Screenshots</a>
+    </div>
+    <div class="footer-col">
+      <h5>Build</h5>
+      <a href="sprite_preview.html">Sprite Preview</a>
+      <a href="#">GitHub</a>
+      <a href="#">Developer Notes</a>
+      <a href="#">Patch Log</a>
+    </div>
+    <div class="footer-col">
+      <h5>Contact</h5>
+      <a href="#">Twitter / X</a>
+      <a href="#">Discord</a>
+      <a href="#">Email</a>
+      <a href="#">Press Kit</a>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <div>© 2026 Pocket Kingdom · Empire Market</div>
+    <div>v1.4.2 · build 50c1afe</div>
+  </div>
+</footer>
+
+<script>
+/* ─── Nav scroll state ─── */
+window.addEventListener('scroll', () => {
+  document.getElementById('nav').classList.toggle('scrolled', window.scrollY > 40);
+});
+
+/* ─── Hero animated canvas ─── */
+(() => {
+  const c = document.getElementById('heroCanvas');
+  const ctx = c.getContext('2d');
+  function resize() {
+    c.width = window.innerWidth * 2;
+    c.height = window.innerHeight * 2;
+    c.style.width = window.innerWidth + 'px';
+    c.style.height = window.innerHeight + 'px';
+    ctx.scale(2, 2);
+  }
+  resize();
+  window.addEventListener('resize', () => { resize(); seed(); });
+
+  const W = () => window.innerWidth, H = () => window.innerHeight;
+
+  let stars, mountains, clouds, embers;
+  function seed() {
+    stars = Array.from({length: 150}, () => ({
+      x: Math.random()*W(), y: Math.random()*H()*0.65,
+      r: Math.random()*1.6 + 0.3, phase: Math.random()*Math.PI*2,
+    }));
+    mountains = [
+      { y: 0.72, color: '#162d58', peaks: Array.from({length:9}, () => 0.58 + Math.random()*0.08) },
+      { y: 0.76, color: '#0d1f40', peaks: Array.from({length:7}, () => 0.63 + Math.random()*0.06) },
+    ];
+    clouds = Array.from({length: 4}, () => ({
+      x: Math.random()*W(), y: 40 + Math.random()*160,
+      w: 140 + Math.random()*160, speed: 0.04 + Math.random()*0.06,
+    }));
+    embers = Array.from({length: 20}, () => ({
+      x: W()*0.6 + Math.random()*W()*0.4,
+      y: H()*0.5 + Math.random()*H()*0.4,
+      r: Math.random()*1.2 + 0.4,
+      vy: -0.2 - Math.random()*0.4,
+      phase: Math.random()*Math.PI*2,
+    }));
+  }
+  seed();
+
+  function drawMountainRange(m) {
+    ctx.fillStyle = m.color;
+    ctx.beginPath();
+    ctx.moveTo(0, H()*m.y);
+    const n = m.peaks.length;
+    for (let i = 0; i < n; i++) {
+      const x = (W() / (n-1)) * i;
+      ctx.lineTo(x, H() * m.peaks[i]);
+    }
+    ctx.lineTo(W(), H()*m.y);
+    ctx.lineTo(W(), H());
+    ctx.lineTo(0, H());
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  let raf;
+  function loop(t) {
+    t = t * 0.001;
+    ctx.clearRect(0, 0, W(), H());
+
+    // Night sky gradient with slight gold glow at top-right
+    const sky = ctx.createLinearGradient(0, 0, 0, H());
+    sky.addColorStop(0, '#1e3c72');
+    sky.addColorStop(0.65, '#2a5298');
+    sky.addColorStop(0.72, '#1a2040');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, W(), H());
+
+    // Gold glow blob (blood moon hint)
+    const glow = ctx.createRadialGradient(W()*0.85, H()*0.25, 10, W()*0.85, H()*0.25, 300);
+    glow.addColorStop(0, 'rgba(255, 180, 50, 0.4)');
+    glow.addColorStop(0.4, 'rgba(255, 100, 50, 0.1)');
+    glow.addColorStop(1, 'transparent');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, W(), H());
+
+    // Moon
+    ctx.beginPath();
+    ctx.arc(W()*0.85, H()*0.25, 48, 0, Math.PI*2);
+    ctx.fillStyle = '#f8d068';
+    ctx.shadowColor = 'rgba(255, 180, 50, 0.6)';
+    ctx.shadowBlur = 40;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    // Moon crater shadow
+    ctx.beginPath();
+    ctx.arc(W()*0.87, H()*0.23, 44, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(200, 140, 40, 0.12)';
+    ctx.fill();
+
+    // Stars
+    stars.forEach(s => {
+      const a = 0.3 + 0.5 * Math.sin(t*0.8 + s.phase);
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI*2);
+      ctx.fillStyle = `rgba(255,255,255,${a})`;
+      ctx.fill();
+    });
+
+    // Clouds
+    clouds.forEach(cl => {
+      cl.x -= cl.speed;
+      if (cl.x + cl.w < -100) cl.x = W() + 50;
+      const grd = ctx.createRadialGradient(cl.x, cl.y, 0, cl.x, cl.y, cl.w*0.6);
+      grd.addColorStop(0, 'rgba(255,255,255,0.05)');
+      grd.addColorStop(1, 'transparent');
+      ctx.fillStyle = grd;
+      ctx.beginPath();
+      ctx.ellipse(cl.x, cl.y, cl.w*0.6, cl.w*0.25, 0, 0, Math.PI*2);
+      ctx.fill();
+    });
+
+    // Mountain silhouettes
+    mountains.forEach(drawMountainRange);
+
+    // Ground
+    ctx.fillStyle = '#1e1104';
+    ctx.fillRect(0, H()*0.82, W(), H()*0.18);
+    ctx.fillStyle = '#2a1a08';
+    ctx.fillRect(0, H()*0.82, W(), 2);
+
+    // Tiny castle silhouette center-left
+    const bx = W()*0.15, by = H()*0.82;
+    ctx.fillStyle = '#050508';
+    // left tower
+    ctx.fillRect(bx-12, by-28, 14, 28);
+    [bx-12, bx-6, bx-1].forEach(tx => ctx.fillRect(tx, by-33, 4, 6));
+    // main
+    ctx.fillRect(bx+6, by-42, 22, 42);
+    [bx+6, bx+12, bx+18, bx+24].forEach(tx => ctx.fillRect(tx, by-47, 4, 6));
+    // flag
+    ctx.fillStyle = '#ffd700';
+    ctx.beginPath();
+    ctx.moveTo(bx+17, by-47);
+    ctx.lineTo(bx+17, by-58);
+    ctx.lineTo(bx+25, by-54);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#050508'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(bx+17, by-47); ctx.lineTo(bx+17, by-60); ctx.stroke();
+
+    // Fire embers on the right (forge glow)
+    embers.forEach(e => {
+      e.y += e.vy;
+      if (e.y < H()*0.3) {
+        e.y = H()*0.85 + Math.random()*40;
+        e.x = W()*0.62 + Math.random()*W()*0.35;
+      }
+      const a = 0.4 + 0.4 * Math.sin(t*4 + e.phase);
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.r, 0, Math.PI*2);
+      ctx.fillStyle = `rgba(255, ${150 + Math.floor(a*100)}, 50, ${a})`;
+      ctx.fill();
+    });
+
+    raf = requestAnimationFrame(loop);
+  }
+  loop(0);
+})();
+
+/* ─── Story canvas (crown) ─── */
+(() => {
+  const c = document.getElementById('storyCanvas');
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  const W = 420, H = 420;
+
+  function render(t) {
+    ctx.clearRect(0,0,W,H);
+    // concentric ring background
+    for (let r = 180; r > 40; r -= 24) {
+      const a = 0.06 + (180 - r) / 300;
+      ctx.beginPath(); ctx.arc(W/2, H/2, r, 0, Math.PI*2);
+      ctx.strokeStyle = `rgba(255, 215, 0, ${a * 0.3})`;
+      ctx.lineWidth = 1; ctx.stroke();
+    }
+    // rotating gold arcs
+    for (let i = 0; i < 6; i++) {
+      const base = t * 0.0003 + i * Math.PI/3;
+      ctx.beginPath();
+      ctx.arc(W/2, H/2, 150, base, base + Math.PI/8);
+      ctx.strokeStyle = `rgba(255, 215, 0, ${0.3 + 0.3*Math.sin(t*0.002 + i)})`;
+      ctx.lineWidth = 3; ctx.stroke();
+    }
+    // central glow
+    const glow = ctx.createRadialGradient(W/2, H/2, 10, W/2, H/2, 140);
+    glow.addColorStop(0, 'rgba(255,215,0,0.2)');
+    glow.addColorStop(1, 'transparent');
+    ctx.fillStyle = glow; ctx.fillRect(0,0,W,H);
+
+    // Draw crown
+    const cx = W/2, cy = H/2, w = 130, h = 65;
+    ctx.fillStyle = '#ffd700';
+    ctx.beginPath();
+    ctx.moveTo(cx - w/2, cy + h*0.4);
+    ctx.lineTo(cx - w/2, cy - h*0.1);
+    ctx.lineTo(cx - w*0.32, cy - h*0.6);
+    ctx.lineTo(cx - w*0.17, cy - h*0.15);
+    ctx.lineTo(cx, cy - h);
+    ctx.lineTo(cx + w*0.17, cy - h*0.15);
+    ctx.lineTo(cx + w*0.32, cy - h*0.6);
+    ctx.lineTo(cx + w/2, cy - h*0.1);
+    ctx.lineTo(cx + w/2, cy + h*0.4);
+    ctx.quadraticCurveTo(cx, cy + h*0.7, cx - w/2, cy + h*0.4);
+    ctx.closePath();
+    ctx.fill();
+
+    // Gems
+    const gems = ['#cc2200', '#00f5ff', '#cc2200'];
+    gems.forEach((gc, i) => {
+      const gx = cx - w*0.3 + (w*0.6/2) * i;
+      const gy = cy + h*0.1;
+      ctx.beginPath(); ctx.arc(gx, gy, 8, 0, Math.PI*2);
+      ctx.fillStyle = gc; ctx.fill();
+      ctx.beginPath(); ctx.arc(gx-2, gy-2, 3, 0, Math.PI*2);
+      ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.fill();
+    });
+
+    // Spike tips - tiny stars on each spike
+    [-w*0.32, 0, w*0.32].forEach((dx, i) => {
+      const y = cy - (i === 1 ? h : h*0.6);
+      const a = 0.5 + 0.5*Math.sin(t*0.003 + i*2);
+      ctx.beginPath(); ctx.arc(cx + dx, y - 4, 3, 0, Math.PI*2);
+      ctx.fillStyle = `rgba(255,255,255,${a})`;
+      ctx.fill();
+    });
+
+    requestAnimationFrame(render);
+  }
+  render(0);
+})();
+
+/* ─── Weapon visual (feature card) ─── */
+(() => {
+  const v = document.getElementById('weaponVisual');
+  if (!v) return;
+  const c = document.createElement('canvas');
+  c.width = v.clientWidth * 2 || 800;
+  c.height = 360;
+  c.style.width = '100%';
+  c.style.height = '100%';
+  v.appendChild(c);
+  const ctx = c.getContext('2d');
+
+  const weapons = [
+    { name: 'FISTS', color: '#d4a87a', draw: (ctx, x, y) => {
+      ctx.fillStyle = '#d4a87a';
+      ctx.beginPath(); ctx.arc(x, y, 14, 0, Math.PI*2); ctx.fill();
+    }},
+    { name: 'AXE', color: '#aaaacc', draw: (ctx, x, y) => {
+      ctx.strokeStyle = '#8b4513'; ctx.lineWidth = 6;
+      ctx.beginPath(); ctx.moveTo(x, y+30); ctx.lineTo(x+12, y-42); ctx.stroke();
+      ctx.fillStyle = '#8a8a9a';
+      ctx.beginPath(); ctx.moveTo(x+12, y-42); ctx.lineTo(x+42, y-30); ctx.lineTo(x+18, y-58); ctx.closePath(); ctx.fill();
+    }},
+    { name: 'SWORD', color: '#ccccee', draw: (ctx, x, y) => {
+      ctx.strokeStyle = '#ccccee'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(x, y+30); ctx.lineTo(x+4, y-60); ctx.stroke();
+      ctx.strokeStyle = '#8b4513'; ctx.lineWidth = 8;
+      ctx.beginPath(); ctx.moveTo(x-12, y+18); ctx.lineTo(x+16, y+18); ctx.stroke();
+    }},
+    { name: 'FLAME HAMMER', color: '#ff6600', draw: (ctx, x, y, t) => {
+      ctx.strokeStyle = '#8b4513'; ctx.lineWidth = 6;
+      ctx.beginPath(); ctx.moveTo(x, y+30); ctx.lineTo(x+10, y-40); ctx.stroke();
+      const pulse = 0.5 + 0.5*Math.sin(t*0.006);
+      ctx.fillStyle = `rgb(${220+Math.floor(pulse*30)}, ${80+Math.floor(pulse*60)}, 0)`;
+      ctx.fillRect(x-14, y-58, 44, 28);
+      ctx.fillStyle = `rgba(255, ${200+Math.floor(pulse*50)}, 50, ${0.5+pulse*0.4})`;
+      ctx.beginPath(); ctx.arc(x+8, y-44, 22, 0, Math.PI*2); ctx.fill();
+      // embers
+      for (let i = 0; i < 6; i++) {
+        const ex = x + 8 + Math.cos(t*0.003 + i) * 30;
+        const ey = y - 44 - (t*0.05 + i*12) % 80;
+        ctx.beginPath(); ctx.arc(ex, ey, 1.5 + Math.sin(t*0.01+i), 0, Math.PI*2);
+        ctx.fillStyle = `rgba(255, ${100+Math.floor(Math.random()*100)}, 0, ${0.3+Math.random()*0.5})`;
+        ctx.fill();
+      }
+    }},
+  ];
+
+  function loop(t) {
+    ctx.clearRect(0,0,c.width,c.height);
+    const W = c.width, H = c.height;
+    // bg gradient
+    const grd = ctx.createLinearGradient(0,0,0,H);
+    grd.addColorStop(0,'#1e3c72'); grd.addColorStop(0.6,'#2a5298'); grd.addColorStop(0.61,'#1e1104'); grd.addColorStop(1,'#1e1104');
+    ctx.fillStyle = grd; ctx.fillRect(0,0,W,H);
+
+    const slotW = W / weapons.length;
+    const groundY = H*0.7;
+
+    weapons.forEach((w, i) => {
+      const x = slotW * i + slotW/2;
+      // pedestal
+      ctx.fillStyle = '#0a0a10';
+      ctx.fillRect(x - 40, groundY, 80, 10);
+      ctx.fillStyle = '#1a1a2a';
+      ctx.fillRect(x - 36, groundY - 3, 72, 3);
+
+      // weapon — lift & rotate slightly
+      const bob = Math.sin(t*0.002 + i*1.5) * 5;
+      ctx.save();
+      ctx.translate(x, groundY + bob - 20);
+      w.draw(ctx, 0, 0, t);
+      ctx.restore();
+
+      // name
+      ctx.textAlign = 'center';
+      ctx.font = "600 16px 'Outfit'";
+      ctx.fillStyle = i === 3 ? '#ffd700' : 'rgba(255,255,255,0.5)';
+      ctx.fillText(w.name, x, H - 18);
+    });
+
+    requestAnimationFrame(loop);
+  }
+  loop(0);
+})();
+
+</script>
+</body>
+</html>
