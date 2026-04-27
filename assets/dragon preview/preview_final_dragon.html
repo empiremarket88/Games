@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wyrmwing - Procedural Dragon</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;600;900&display=swap');
+
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at center, #2a0808 0%, #0a0202 100%);
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #overlay {
+            position: absolute;
+            top: 30px;
+            left: 30px;
+            background: rgba(16, 11, 11, 0.6);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(204, 34, 0, 0.3);
+            padding: 24px 32px;
+            border-radius: 16px;
+            color: #c5c6c7;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+            pointer-events: none;
+            max-width: 380px;
+            z-index: 10;
+            transition: all 0.3s ease;
+        }
+
+        h1 {
+            margin: 0 0 12px 0;
+            font-size: 32px;
+            font-weight: 900;
+            background: linear-gradient(90deg, #ff5500, #cc2200);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+        }
+
+        p {
+            margin: 8px 0;
+            font-size: 15px;
+            line-height: 1.6;
+            font-weight: 300;
+            color: #e0e2e4;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 6px 12px;
+            background: rgba(255, 85, 0, 0.1);
+            border: 1px solid rgba(255, 85, 0, 0.4);
+            border-radius: 6px;
+            font-size: 12px;
+            color: #ff5500;
+            margin-top: 16px;
+            font-weight: 600;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            box-shadow: 0 0 10px rgba(255, 85, 0, 0.2);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="overlay">
+        <h1>Wyrmwing</h1>
+        <p>Procedurally animated dragon featuring forward kinematics, dynamic particle systems, and continuous flight
+            physics.</p>
+        <div class="badge">Live Preview</div>
+    </div>
+    <canvas id="dragonCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('dragonCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let width, height;
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        class Particle {
+            constructor(x, y, vx, vy, life, color, size, isFire) {
+                this.x = x; this.y = y; this.vx = vx; this.vy = vy;
+                this.life = life; this.maxLife = life;
+                this.color = color; this.size = size;
+                this.isFire = isFire;
+            }
+            update(dt) {
+                this.x += this.vx * dt;
+                this.y += this.vy * dt;
+                this.life -= dt;
+                if (this.isFire) {
+                    this.size += 25 * dt;
+                    this.vy -= 120 * dt; // Heat rises normally
+                } else {
+                    this.size *= 0.96;
+                }
+            }
+            draw(ctx) {
+                if (this.life <= 0) return;
+                ctx.globalAlpha = Math.max(0, this.life / this.maxLife);
+                ctx.fillStyle = this.color;
+
+                if (this.isFire) {
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = this.color;
+                }
+
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.shadowBlur = 0; // reset
+                ctx.globalAlpha = 1;
+            }
+        }
+
+        class Dragon {
+            constructor() {
+                this.time = 0;
+                this.particles = [];
+                this.segments = [];
+                for (let i = 0; i < 32; i++) {
+                    this.segments.push({ x: 0, y: 0, r: 0 });
+                }
+            }
+
+            update(dt, t) {
+                this.time = t;
+                for (let i = this.particles.length - 1; i >= 0; i--) {
+                    this.particles[i].update(dt);
+                    if (this.particles[i].life <= 0) {
+                        this.particles.splice(i, 1);
+                    }
+                }
+
+                for (let i = 0; i < this.segments.length; i++) {
+                    let tOffset = this.time * 6 - i * 0.28;
+                    let x = 160 - i * 18;
+                    let y = Math.sin(tOffset) * 22;
+                    let tilt = Math.cos(this.time * 1.8) * 12;
+                    y += Math.sin(i * 0.1) * tilt;
+
+                    let r;
+                    if (i < 5) r = 12 + i * 2.5;
+                    else if (i < 16) r = 24 - (i - 5) * 0.3;
+                    else r = 20.7 - (i - 16) * 1.3;
+
+                    this.segments[i] = { x, y, r: Math.max(2, r) };
+                }
+            }
+
+            drawJoint(ctx, x, y, r) {
+                let grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+                grad.addColorStop(0, "#ff5500");
+                grad.addColorStop(0.5, "#cc2200");
+                grad.addColorStop(1, "#2a0808");
+
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.arc(x, y, r, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = "rgba(255, 255, 255, 0.15)";
+                ctx.beginPath();
+                ctx.arc(x - r * 0.2, y - r * 0.2, r * 0.4, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            drawWing(ctx, shoulder, isFront) {
+                let flapFreq = 1.1;
+                let phase = this.time * Math.PI * 2 * flapFreq;
+                if (!isFront) phase -= 0.15;
+
+                let flap = Math.sin(phase);
+                let downStroke = -Math.cos(phase); // Max 1.0 at mid-downstroke
+
+                let lengthScale = isFront ? 1.3 : 0.9;
+
+                let elbowDist = 80 * lengthScale;
+                // Swing wing from UP to DOWN (126 degree sweep)
+                let elbowAngle = Math.PI + flap * 1.1;
+
+                let elbowX = shoulder.x + Math.cos(elbowAngle) * elbowDist;
+                let elbowY = shoulder.y + Math.sin(elbowAngle) * elbowDist;
+
+                let wristDist = 90 * lengthScale;
+                let wristFlap = Math.sin(phase - 0.6);
+                let wristAngle = elbowAngle + 0.2 + wristFlap * 0.5;
+
+                let wristX = elbowX + Math.cos(wristAngle) * wristDist;
+                let wristY = elbowY + Math.sin(wristAngle) * wristDist;
+
+                let fingers = [];
+                for (let i = 0; i < 5; i++) {
+                    let fingerFlap = Math.sin(phase - 1.0);
+                    let fanOffset = -0.1 - i * 0.25;
+                    // Spread fingers wider on downstroke, fold on upstroke
+                    let spreadFactor = 1.0 + downStroke * 0.3;
+                    let fAngle = wristAngle + fanOffset * spreadFactor + fingerFlap * 0.3;
+
+                    let fDist = (160 - i * 20) * lengthScale;
+                    fingers.push({
+                        x: wristX + Math.cos(fAngle) * fDist,
+                        y: wristY + Math.sin(fAngle) * fDist
+                    });
+                }
+
+                if (isFront && Math.random() < 0.5) {
+                    for (let i = 0; i < fingers.length; i += 2) {
+                        this.particles.push(new Particle(
+                            fingers[i].x, fingers[i].y,
+                            -180 - Math.random() * 80, (Math.random() - 0.5) * 30,
+                            0.5 + Math.random() * 0.5,
+                            `rgba(255, 85, 0, 0.5)`,
+                            2 + Math.random() * 4,
+                            false
+                        ));
+                    }
+                }
+
+                let fillAlpha = isFront ? 1.0 : 0.7;
+                let strokeAlpha = isFront ? 1.0 : 0.6;
+
+                let grad = ctx.createRadialGradient(shoulder.x, shoulder.y, 20 * lengthScale, shoulder.x, shoulder.y, 180 * lengthScale);
+                grad.addColorStop(0, `rgba(255, 60, 10, ${fillAlpha})`);
+                grad.addColorStop(0.4, `rgba(120, 20, 5, ${fillAlpha})`);
+                grad.addColorStop(1, `rgba(25, 5, 2, ${fillAlpha})`);
+
+                ctx.fillStyle = grad;
+                ctx.strokeStyle = `rgba(255, 85, 0, ${strokeAlpha})`;
+                ctx.lineWidth = 2.0;
+
+                ctx.beginPath();
+                ctx.moveTo(shoulder.x, shoulder.y);
+                ctx.lineTo(elbowX, elbowY);
+                ctx.lineTo(wristX, wristY);
+                for (let i = 0; i < fingers.length; i++) {
+                    ctx.lineTo(fingers[i].x, fingers[i].y);
+                }
+                ctx.lineTo(shoulder.x - 70 * lengthScale, shoulder.y + 15 * lengthScale);
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.strokeStyle = `rgba(255, 85, 0, ${isFront ? 0.6 : 0.3})`;
+                for (let i = 0; i < fingers.length; i++) {
+                    ctx.moveTo(wristX, wristY);
+                    ctx.lineTo(fingers[i].x, fingers[i].y);
+                }
+                ctx.stroke();
+
+                this.drawJoint(ctx, shoulder.x, shoulder.y, 11 * lengthScale);
+                this.drawJoint(ctx, elbowX, elbowY, 9 * lengthScale);
+                this.drawJoint(ctx, wristX, wristY, 7 * lengthScale);
+            }
+
+            drawLeg(ctx, anchor, isFront, isForeLeg) {
+                let lengthScale = isFront ? 1.15 : 0.85;
+                let colorAlpha = isFront ? 1 : 0.5;
+
+                let thighAngle = isForeLeg ? Math.PI * 0.85 : Math.PI * 0.25;
+                let thighLen = 50 * lengthScale;
+
+                let legWobble = Math.sin(this.time * 4 + (isForeLeg ? 0 : 1.5)) * 0.15;
+                thighAngle += legWobble;
+
+                let kneeX = anchor.x + Math.cos(thighAngle) * thighLen;
+                let kneeY = anchor.y + Math.sin(thighAngle) * thighLen;
+
+                let shinAngle = isForeLeg ? Math.PI * 0.15 : Math.PI * 0.85;
+                shinAngle += legWobble;
+                let shinLen = 50 * lengthScale;
+
+                let footX = kneeX + Math.cos(shinAngle) * shinLen;
+                let footY = kneeY + Math.sin(shinAngle) * shinLen;
+
+                ctx.strokeStyle = `rgba(65, 20, 15, ${colorAlpha})`;
+                ctx.lineWidth = 14 * lengthScale;
+                ctx.lineCap = "round";
+                ctx.lineJoin = "round";
+
+                ctx.beginPath();
+                ctx.moveTo(anchor.x, anchor.y);
+                ctx.lineTo(kneeX, kneeY);
+                ctx.lineTo(footX, footY);
+                ctx.stroke();
+
+                ctx.fillStyle = `rgba(197, 198, 199, ${colorAlpha})`;
+                for (let i = 0; i < 4; i++) {
+                    let clawAngle = (i - 1.5) * 0.35;
+                    ctx.beginPath();
+                    ctx.moveTo(footX, footY);
+
+                    let cpX = footX + Math.cos(clawAngle - 0.4) * 18 * lengthScale;
+                    let cpY = footY + Math.sin(clawAngle - 0.4) * 18 * lengthScale;
+                    let tipX = footX + Math.cos(clawAngle) * 30 * lengthScale;
+                    let tipY = footY + Math.sin(clawAngle) * 30 * lengthScale;
+
+                    ctx.quadraticCurveTo(cpX, cpY, tipX, tipY);
+                    ctx.lineTo(footX + Math.cos(clawAngle + 0.2) * 6, footY + 6);
+                    ctx.fill();
+                }
+
+                this.drawJoint(ctx, anchor.x, anchor.y, 9 * lengthScale);
+                this.drawJoint(ctx, kneeX, kneeY, 8 * lengthScale);
+                this.drawJoint(ctx, footX, footY, 7 * lengthScale);
+            }
+
+            drawHead(ctx, seg) {
+                let x = seg.x;
+                let y = seg.y;
+
+                ctx.save();
+                ctx.translate(x, y);
+                let fireCycle = (this.time % 6);
+                let isBreathingFire = fireCycle > 4.2;
+
+                let headTilt = 0;
+                if (isBreathingFire) {
+                    let phaseFire = fireCycle - 4.2;
+                    if (phaseFire < 0.2) headTilt = (phaseFire / 0.2) * (Math.PI / 4);
+                    else if (phaseFire > 1.6) headTilt = ((1.8 - phaseFire) / 0.2) * (Math.PI / 4);
+                    else headTilt = Math.PI / 4;
+                }
+
+                let angle = Math.sin(this.time * 3) * 0.12 + headTilt;
+                ctx.rotate(angle);
+
+                let jawOpen = isBreathingFire ? 40 : Math.max(0, Math.sin(this.time * 6)) * 10;
+
+                if (isBreathingFire) {
+                    let mX = Math.cos(angle) * 35;
+                    let mY = Math.sin(angle) * 35 + jawOpen * 0.6;
+
+                    for (let i = 0; i < 4; i++) {
+                        let speed = 250 + Math.random() * 200;
+                        let spread = (Math.random() - 0.5) * 0.6;
+                        let fColor = Math.random() > 0.4 ? '#ff3300' : '#ffaa00';
+                        if (Math.random() > 0.85) fColor = '#ffffff';
+
+                        this.particles.push(new Particle(
+                            x + mX, y + mY,
+                            Math.cos(angle + spread) * speed,
+                            Math.sin(angle + spread) * speed,
+                            0.3 + Math.random() * 0.5,
+                            fColor,
+                            8 + Math.random() * 12,
+                            true
+                        ));
+                    }
+                }
+
+                ctx.fillStyle = "#2a0808";
+                ctx.strokeStyle = "#cc2200";
+                ctx.lineWidth = 2;
+
+                ctx.beginPath();
+                ctx.moveTo(0, -14);
+                ctx.lineTo(50, -18);
+                ctx.lineTo(55, -6);
+                ctx.lineTo(22, 0);
+                ctx.lineTo(-12, 10);
+                ctx.closePath();
+                ctx.fill(); ctx.stroke();
+
+                ctx.save();
+                ctx.translate(12, 0);
+                ctx.rotate(jawOpen * Math.PI / 180);
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(40, 6);
+                ctx.lineTo(45, 18);
+                ctx.lineTo(0, 14);
+                ctx.closePath();
+                ctx.fill(); ctx.stroke();
+
+                ctx.fillStyle = "#ffffff";
+                for (let i = 0; i < 6; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(18 + i * 5 - 12, 0);
+                    ctx.lineTo(20 + i * 5 - 12, 8);
+                    ctx.lineTo(22 + i * 5 - 12, 0);
+                    ctx.fill();
+
+                    ctx.beginPath();
+                    ctx.moveTo(12 + i * 5, 6);
+                    ctx.lineTo(14 + i * 5, -2);
+                    ctx.lineTo(16 + i * 5, 6);
+                    ctx.fill();
+                }
+
+                if (isBreathingFire) {
+                    ctx.fillStyle = "#ff0000";
+                    ctx.beginPath();
+                    ctx.arc(18, 6, 10, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = "rgba(255, 100, 0, 0.6)";
+                    ctx.shadowBlur = 20;
+                    ctx.shadowColor = "#ff5500";
+                    ctx.beginPath();
+                    ctx.arc(18, 6, 18, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+                } else {
+                    ctx.fillStyle = "#990011";
+                    ctx.beginPath();
+                    ctx.moveTo(12, 10);
+                    ctx.quadraticCurveTo(22, 6, 28, 10);
+                    ctx.quadraticCurveTo(22, 12, 12, 12);
+                    ctx.fill();
+                }
+                ctx.restore();
+
+                let isBlinking = (this.time % 4.5) < 0.12;
+                if (!isBlinking) {
+                    ctx.fillStyle = "#ffdd00";
+                    ctx.beginPath();
+                    ctx.moveTo(20, -12);
+                    ctx.lineTo(30, -14);
+                    ctx.lineTo(25, -6);
+                    ctx.closePath();
+                    ctx.fill();
+
+                    ctx.fillStyle = "rgba(255, 255, 0, 0.4)";
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = "#ffff00";
+                    ctx.beginPath();
+                    ctx.arc(25, -10, 10, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+
+                    ctx.strokeStyle = "#000000";
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(25, -13);
+                    ctx.lineTo(24, -7);
+                    ctx.stroke();
+                } else {
+                    ctx.strokeStyle = "#ff5500";
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(20, -10);
+                    ctx.lineTo(30, -10);
+                    ctx.stroke();
+                }
+
+                ctx.fillStyle = "#0b0c10";
+                ctx.strokeStyle = "#cc2200";
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(5, -14);
+                ctx.quadraticCurveTo(-18, -40, -35, -28);
+                ctx.quadraticCurveTo(-18, -18, 0, -10);
+                ctx.fill(); ctx.stroke();
+
+                ctx.restore();
+            }
+
+            drawBody(ctx) {
+                ctx.beginPath();
+                for (let i = 0; i < this.segments.length; i++) {
+                    ctx.lineTo(this.segments[i].x, this.segments[i].y - this.segments[i].r);
+                }
+                for (let i = this.segments.length - 1; i >= 0; i--) {
+                    ctx.lineTo(this.segments[i].x, this.segments[i].y + this.segments[i].r);
+                }
+                ctx.fillStyle = "#2a0808";
+                ctx.fill();
+
+                ctx.strokeStyle = "rgba(204, 34, 0, 0.6)";
+                ctx.lineWidth = 1.5;
+
+                for (let i = this.segments.length - 1; i >= 0; i--) {
+                    let seg = this.segments[i];
+
+                    let grad = ctx.createRadialGradient(seg.x, seg.y, 0, seg.x, seg.y, seg.r * 1.5);
+                    grad.addColorStop(0, "#ff5500");
+                    grad.addColorStop(0.5, "#cc2200");
+                    grad.addColorStop(1, "#0b0c10");
+                    ctx.fillStyle = grad;
+
+                    let angle = 0;
+                    if (i > 0) {
+                        let prev = this.segments[i - 1];
+                        angle = Math.atan2(seg.y - prev.y, seg.x - prev.x);
+                    } else {
+                        angle = Math.PI;
+                    }
+
+                    let r = seg.r * 1.4;
+                    ctx.beginPath();
+                    ctx.moveTo(seg.x + Math.cos(angle) * r, seg.y + Math.sin(angle) * r);
+                    ctx.lineTo(seg.x + Math.cos(angle + 2.4) * r, seg.y + Math.sin(angle + 2.4) * r);
+                    ctx.lineTo(seg.x + Math.cos(angle - 2.4) * r, seg.y + Math.sin(angle - 2.4) * r);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.stroke();
+
+                    ctx.beginPath();
+                    ctx.arc(seg.x - 3, seg.y - 3, seg.r * 0.4, 0, Math.PI * 2);
+                    ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
+                    ctx.fill();
+
+                    if (i % 2 === 0 && i > 3) {
+                        ctx.fillStyle = "#ff5500";
+                        ctx.beginPath();
+                        let upAngle = angle - Math.PI / 2;
+                        ctx.moveTo(seg.x + Math.cos(upAngle) * seg.r, seg.y + Math.sin(upAngle) * seg.r);
+                        let spikeLen = 12 + (20 - i) * 0.6;
+                        if (spikeLen < 6) spikeLen = 6;
+                        ctx.lineTo(seg.x + Math.cos(upAngle) * (seg.r + spikeLen) + Math.cos(angle) * 10, seg.y + Math.sin(upAngle) * (seg.r + spikeLen) + Math.sin(angle) * 10);
+                        ctx.lineTo(seg.x + Math.cos(upAngle + 0.6) * seg.r, seg.y + Math.sin(upAngle + 0.6) * seg.r);
+                        ctx.fill();
+                    }
+                }
+
+                let lastSeg = this.segments[this.segments.length - 1];
+                let preLast = this.segments[this.segments.length - 2];
+                let tailAngle = Math.atan2(lastSeg.y - preLast.y, lastSeg.x - preLast.x);
+
+                ctx.fillStyle = "#ff5500";
+                ctx.beginPath();
+                ctx.moveTo(lastSeg.x + Math.cos(tailAngle + Math.PI / 2) * lastSeg.r, lastSeg.y + Math.sin(tailAngle + Math.PI / 2) * lastSeg.r);
+                ctx.lineTo(lastSeg.x + Math.cos(tailAngle) * 45, lastSeg.y + Math.sin(tailAngle) * 45);
+                ctx.lineTo(lastSeg.x + Math.cos(tailAngle - Math.PI / 2) * lastSeg.r, lastSeg.y + Math.sin(tailAngle - Math.PI / 2) * lastSeg.r);
+                ctx.fill();
+            }
+
+            draw(ctx, cx, cy) {
+                ctx.save();
+                ctx.translate(cx, cy);
+
+                ctx.scale(-1, 1); // Horizontal flip
+
+                let fire = [];
+                let trails = [];
+                for (let p of this.particles) {
+                    if (p.isFire) fire.push(p);
+                    else trails.push(p);
+                }
+
+                for (let p of trails) p.draw(ctx);
+
+                let shoulderArea = this.segments[4];
+                let hipArea = this.segments[15];
+
+                this.drawWing(ctx, shoulderArea, false);
+                this.drawLeg(ctx, hipArea, false, false);
+                this.drawLeg(ctx, shoulderArea, false, true);
+
+                this.drawBody(ctx);
+
+                this.drawLeg(ctx, hipArea, true, false);
+                this.drawLeg(ctx, shoulderArea, true, true);
+                this.drawWing(ctx, shoulderArea, true);
+
+                this.drawHead(ctx, this.segments[0]);
+
+                for (let p of fire) p.draw(ctx);
+
+                ctx.restore();
+            }
+        }
+
+        const dragon = new Dragon();
+        let lastTime = performance.now();
+
+        function drawSpeedLines(ctx, time, dt) {
+            if (!window.speedLines) window.speedLines = [];
+            if (Math.random() < 0.6) {
+                window.speedLines.push({
+                    x: width + 100,
+                    y: Math.random() * height,
+                    length: 60 + Math.random() * 250,
+                    speed: 600 + Math.random() * 800,
+                    alpha: Math.random() * 0.15
+                });
+            }
+
+            ctx.strokeStyle = '#cc2200';
+            ctx.lineWidth = 1;
+            for (let i = window.speedLines.length - 1; i >= 0; i--) {
+                let line = window.speedLines[i];
+                line.x -= line.speed * dt;
+
+                ctx.globalAlpha = line.alpha;
+                ctx.beginPath();
+                ctx.moveTo(line.x, line.y);
+                ctx.lineTo(line.x + line.length, line.y);
+                ctx.stroke();
+
+                if (line.x + line.length < 0) {
+                    window.speedLines.splice(i, 1);
+                }
+            }
+            ctx.globalAlpha = 1;
+        }
+
+        function animate(currentTime) {
+            let dt = (currentTime - lastTime) / 1000;
+            lastTime = currentTime;
+            if (dt > 0.1) dt = 0.1;
+
+            ctx.clearRect(0, 0, width, height);
+
+            drawSpeedLines(ctx, currentTime / 1000, dt);
+
+            dragon.update(dt, currentTime / 1000);
+            dragon.draw(ctx, width * 0.5 + 50, height * 0.5);
+
+            requestAnimationFrame(animate);
+        }
+        requestAnimationFrame(animate);
+    </script>
+</body>
+
+</html>
