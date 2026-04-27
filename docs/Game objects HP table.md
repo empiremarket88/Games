@@ -5,7 +5,8 @@ Game Objects HP Table
 Object Name                HP Value     Type
 --------------------------------------------------------------------------------------
 Enemy Camp                 5000         Building (Defensive Spawns)
-Enemy Dragon (Boss)        300          Enemy
+Cyborg Dragon (Boss)       300          Enemy (Cybernetic)
+Wyrmwing Dragon (Boss)     300          Enemy (Wave 3 & 7 Boss — Flying, Procedural)
 Oak Crusader (Trebuchet)   250          Ally (Siege Unit) — Repair: [H] + 10 Wood
 Barracks                   200          Building
 Farm                       150          Building
@@ -39,14 +40,22 @@ Oak Crusader (Impact)      Splash       120               Enemies within 80px on
 Oak Crusader (Rolling)     Rolling      2 / tick          Continuous contact while rolling
 Enemy (Minion)             Melee        15 / 18           15 vs Player, 18 vs Allies, 10 vs Walls
 Enemy Archer               Ranged       15                Player / Allies / Buildings
-Enemy Dragon (Melee)       Melee        45 / 30           45 vs Units, 30 vs Buildings
-Enemy Dragon (Laser)       Ranged       60                Area of Effect
+Cyborg Dragon (Melee)      Melee        45 / 30           45 vs Units, 30 vs Buildings
+Cyborg Dragon (Laser)      Ranged       60                Area of Effect (Plasma)
+Wyrmwing (Fire Breath)     Ranged/AoE   8/tick (contact)  All allies, animals, buildings (continuous)
+Wyrmwing (Wing Swipe)      Melee        45 / 30           45 vs Units, 30 vs Buildings (Passing)
 --------------------------------------------------------------------------------------
 
 TIP
 
 Defensive Strategy: Use Soldiers (22 DMG) to hold the front line while Archers (25 DMG) provide fire from safety.
 The Hunter is best used for economy (Animal hunting) but can defend itself with 20 DMG javelins if cornered!
+
+BOSS TIP: WYRMWING
+The Wyrmwing Dragon flies lower than typical aerial threats (groundY - 180). This makes it vulnerable to:
+  - Archer arrows (25 DMG)
+  - Hunter javelins (20 DMG)
+Ensure you have a line of ranged units ready before Wave 3 and 7 begins!
 
 IMPORTANT
 

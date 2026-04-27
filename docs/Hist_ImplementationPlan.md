@@ -154,3 +154,39 @@ Port the fully refined trebuchet prototype into the main game engine with a dedi
 - Stand within 100px of trebuchet → [1][2][3] context-switch to siege controls.
 - Press [3] → Cocking → Charging (creak) → Release whip → Rock launches downward → Rolls and damages enemies.
 - Press [H] with 10 Wood near damaged trebuchet → HP restored, green particles.
+
+---
+
+## 2026-04-27 16:50 - Wyrmwing Dragon Boss Integration (v3.5)
+Port the procedural "Wyrmwing" dragon animation into the core engine as a high-altitude flying boss.
+
+### Goals
+- HP: 300 | Attack: 8/tick fire breath, 45 swipe | Spawn: Waves 3 & 7
+- Multi-joint procedural animation (wing flaps, body sine-wave, head tilt).
+- Continuous-contact fire damage to all entities (allies, buildings, animals).
+
+### Proposed Changes
+
+#### `app.js` — New Classes
+- **`WyrmFire`**: Glow-blended fire projectile with 45° spread, trailing particles, and shadow blur. Deals damage on a 0.1s tick interval to any object (Player, Ally, Building, Animal).
+- **`WyrmwingDragon`**: High-altitude flying enemy (groundY - 180) with a left-to-right horizontal sweeping patrol.
+    - **Procedural Engine**: 32-segment sine-wave body, dual-phase wing flapping (downstroke-spread), and fire-breathing head tilt cycle.
+    - **Attack Cycle**: 6-second period with a 1.8s "continuous" fire breath window.
+    - **Targeting**: Aggressive prioritization of nearest player, unit, or structure.
+
+#### `app.js` — `World` Class
+- **Constructor**: Added `this.wyrmFires = []` for projectile management.
+- **`update()`**: Implemented `wyrmFires` lifecycle and collision checks.
+- **`_spawnWave()`**: Injected `WyrmwingDragon` spawn triggers at `waveNumber === 3 || waveNumber === 7`.
+- **`draw()`**: Added Wyrmwing and WyrmFire to the render pipeline (above ground units, below HUD).
+
+#### `docs/Game objects HP table.md`
+- Added entries for Wyrmwing Dragon and its fire damage profile.
+- Added tactical "BOSS TIP" regarding altitude and ranged unit defense.
+
+### Verification
+- Wait for Wave 3/7 → Dragon sweeps in from the enemy camp.
+- Horizontal flip triggers correctly when changing direction.
+- Fire breath creates a dense particle cone and damages buildings/units on contact.
+- Archers and Hunters correctly target and hit the dragon at its lower altitude.
+

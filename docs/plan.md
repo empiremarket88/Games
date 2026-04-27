@@ -18,7 +18,8 @@
 - **Kingdom Economy**:
     - [x] **Meat Resource**: Sellable item at the Merchant shop.
     - [ ] **Economy Balance**: Resource scarcity vs. Merchant pricing (3 Gold baseline).
-- **Environment**:
+- **Environment & Bosses**:
+    - [x] **Wyrmwing Dragon**: High-altitude procedural flying boss with continuous fire breath (Waves 3 & 7).
     - [ ] **Monarch Deer**: High-fidelity procedural wildlife animation (pending redesign phase).
     - [x] **Animal Redesign (Mockup)**: Gallery tool created for candidate selection.
 

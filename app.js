@@ -1478,8 +1478,386 @@ class EnemyDragon extends Enemy {
     }
 }
 
+// ─── WYRM FIRE ────────────────────────────────────────────────────────────────
+class WyrmFire {
+    constructor(world, x, y, vx, vy) {
+        this.world = world;
+        this.x = x; this.y = y;
+        this.vx = vx; this.vy = vy;
+        this.life = 1.4; this.maxLife = 1.4;
+        this.size = 14;
+        this.tickTimer = 0;
+        this.dead = false;
+    }
+    _hitTargets() {
+        const r = 32;
+        const units = [
+            this.world.game.player,
+            ...this.world.soldiers, ...this.world.workers,
+            ...this.world.hunters, ...this.world.archers,
+            ...this.world.animals
+        ];
+        for (const t of units) {
+            if (!t || t.dead || (t.hp !== undefined && t.hp <= 0)) continue;
+            const ty = t.y || (this.world.groundY - 30);
+            if (Math.hypot(this.x - t.x, this.y - ty) < r) {
+                if (t.takeDamage) t.takeDamage(8);
+            }
+        }
+        const buildings = [...this.world.farms, ...this.world.barracks, ...this.world.trebuchets, ...this.world.woodBlocks];
+        for (const b of buildings) {
+            if (!b || b.dead || b.hp <= 0) continue;
+            if (Math.hypot(this.x - b.x, this.y - (b.y || this.world.groundY - 40)) < r + 30) {
+                if (b.takeDamage) b.takeDamage(8);
+                else { b.hp -= 8; if (b.hp < 0) b.hp = 0; }
+            }
+        }
+        const op = this.world.outpost;
+        if (!op.dead && Math.hypot(this.x - op.x, this.y - (op.y || this.world.groundY - 60)) < r + 50) {
+            op.hp -= 3; if (op.hp < 0) op.hp = 0;
+        }
+    }
+    update(dt) {
+        if (this.dead) return;
+        this.x += this.vx * dt;
+        this.y += this.vy * dt;
+        this.life -= dt;
+        if (this.life <= 0) { this.dead = true; return; }
+        this.tickTimer -= dt;
+        if (this.tickTimer <= 0) { this.tickTimer = 0.1; this._hitTargets(); }
+
+        // Add fire trailing particles
+        if (Math.random() < 0.4) {
+            const pColor = Math.random() > 0.4 ? '#ff3300' : '#ffaa00';
+            const p = new Particle(this.x, this.y, pColor, (Math.random() - 0.5) * 40, -Math.random() * 60);
+            p.life = 0.4 + Math.random() * 0.4;
+            this.world.particles.push(p);
+        }
+    }
+    draw(ctx, cam) {
+        if (this.dead) return;
+        const sx = this.x - cam.x, sy = this.y;
+        const alpha = Math.max(0, this.life / this.maxLife);
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = alpha * 0.9;
+        
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = '#ff5500';
+        
+        const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, this.size * 2.5);
+        g.addColorStop(0, '#ffffff'); g.addColorStop(0.3, '#ff5500'); g.addColorStop(1, 'transparent');
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(sx, sy, this.size * 2.5, 0, Math.PI * 2); ctx.fill();
+        
+        ctx.shadowBlur = 0;
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;
+        ctx.restore();
+    }
+}
+
+// ─── WYRMWING DRAGON (Flying Boss) ───────────────────────────────────────────
+class WyrmwingDragon extends Enemy {
+    constructor(world, x) {
+        super(world, x);
+        this.maxHp = 300; this.hp = 300;
+        this.speed = 85;
+        this.dragonTime = 0;
+        this.fireCd = 0;
+        this.swipeCd = 0;
+        this.sweepDir = -1;
+        this.sweepMinX = world.outpost.x - 500;
+        this.sweepMaxX = x;
+        this.facingRight = false;
+    }
+    _findDragonTarget() {
+        let best = null; let bestDist = Infinity;
+        const candidates = [
+            this.world.game.player,
+            ...this.world.soldiers, ...this.world.workers, ...this.world.hunters,
+            ...this.world.archers, ...this.world.animals,
+            ...this.world.farms, ...this.world.barracks, ...this.world.trebuchets,
+            this.world.outpost
+        ];
+        for (const t of candidates) {
+            if (!t || t.dead || (t.hp !== undefined && t.hp <= 0)) continue;
+            const d = Math.abs(this.x - t.x);
+            if (d < bestDist) { bestDist = d; best = t; }
+        }
+        return best;
+    }
+    update(dt) {
+        if (this.dead) return;
+        this.dragonTime += dt; this.time += dt;
+        this.y = this.world.groundY - 180;
+        this.vy = 0;
+        if (this.hurtTimer > 0) this.hurtTimer -= dt;
+        if (this.fireCd > 0) this.fireCd -= dt;
+        if (this.swipeCd > 0) this.swipeCd -= dt;
+
+        // Horizontal sweep patrol
+        this.x += this.sweepDir * this.speed * dt;
+        this.facingRight = this.sweepDir > 0;
+        if (this.x <= this.sweepMinX) this.sweepDir = 1;
+        if (this.x >= this.sweepMaxX) this.sweepDir = -1;
+
+        // Fire breath cycle: 6 second period, breathes fire for last 1.8s (like preview)
+        const fireCycle = this.dragonTime % 6;
+        const isBreathingFire = fireCycle > 4.2;
+
+        if (isBreathingFire) {
+            // Emitting fire projectiles periodically within the fire window
+            if (this.fireCd <= 0) {
+                this.fireCd = 0.2; // Faster projectile burst during fire breath
+                const baseAngle = this.facingRight ? Math.PI * 0.25 : Math.PI * 0.75;
+                const fireSpeed = 340;
+                const mouthOffX = this.facingRight ? 140 : -140;
+                const mouthX = this.x + mouthOffX;
+                const mouthY = this.y + 30;
+                
+                // Spread 3 projectiles
+                for (const sp of [-0.25, 0, 0.25]) {
+                    const ang = baseAngle + sp;
+                    this.world.wyrmFires.push(new WyrmFire(this.world, mouthX, mouthY,
+                        Math.cos(ang) * fireSpeed, Math.sin(ang) * fireSpeed));
+                }
+            }
+
+            // High-density fire particles for visual flair (matching preview)
+            const mouthOffX = this.facingRight ? 140 : -140;
+            const mouthX = this.x + mouthOffX;
+            const mouthY = this.y + 30;
+            const baseAngle = this.facingRight ? Math.PI * 0.25 : Math.PI * 0.75;
+
+            for (let i = 0; i < 3; i++) {
+                const spread = (Math.random() - 0.5) * 0.6;
+                const pColor = Math.random() > 0.4 ? '#ff3300' : '#ffaa00';
+                const pSpeed = 200 + Math.random() * 150;
+                const p = new Particle(mouthX, mouthY, pColor, 
+                    Math.cos(baseAngle + spread) * pSpeed, 
+                    Math.sin(baseAngle + spread) * pSpeed);
+                p.life = 0.3 + Math.random() * 0.5;
+                this.world.particles.push(p);
+            }
+        } else {
+            // Reset fire cooldown when not breathing fire
+            this.fireCd = 0;
+        }
+        // Wing swipe melee
+        if (this.swipeCd <= 0) {
+            const t = this._findDragonTarget();
+            if (t && Math.abs(this.x - t.x) < 200) {
+                this.swipeCd = 2.0;
+                if (t.takeDamage) t.takeDamage(45);
+                else if (t.hp !== undefined) {
+                    t.hp -= 30; if (t.hp < 0) t.hp = 0;
+                    if (t !== this.world.outpost && t.hp <= 0) t.dead = true;
+                }
+                sfx.playHit();
+            }
+        }
+    }
+    die(world) {
+        if (this.coinDropped) return;
+        this.coinDropped = true;
+        for (let i = 0; i < 25; i++) world.groundItems.push(new GroundItem(world, this.x + (Math.random() - 0.5) * 200, world.groundY - 18, 'coin'));
+        for (let i = 0; i < 40; i++) world.particles.push(new Particle(this.x, this.y, '#ff4400'));
+        for (let i = 0; i < 20; i++) world.particles.push(new Particle(this.x, this.y, '#ffaa00'));
+    }
+    _drawJoint(ctx, x, y, r) {
+        const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+        g.addColorStop(0, '#ff5500'); g.addColorStop(0.5, '#cc2200'); g.addColorStop(1, '#2a0808');
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,0.15)';
+        ctx.beginPath(); ctx.arc(x - r * 0.2, y - r * 0.2, r * 0.4, 0, Math.PI * 2); ctx.fill();
+    }
+    _drawWing(ctx, shoulder, isFront) {
+        const phase = this.dragonTime * Math.PI * 2 * 1.1 - (isFront ? 0 : 0.15);
+        const flap = Math.sin(phase);
+        const downStroke = -Math.cos(phase);
+        const ls = isFront ? 1.3 : 0.9;
+        const fillAlpha = isFront ? 1.0 : 0.7;
+        const strokeAlpha = isFront ? 1.0 : 0.6;
+        const elbowAngle = Math.PI + flap * 1.1;
+        const elbowX = shoulder.x + Math.cos(elbowAngle) * 80 * ls;
+        const elbowY = shoulder.y + Math.sin(elbowAngle) * 80 * ls;
+        const wristAngle = elbowAngle + 0.2 + Math.sin(phase - 0.6) * 0.5;
+        const wristX = elbowX + Math.cos(wristAngle) * 90 * ls;
+        const wristY = elbowY + Math.sin(wristAngle) * 90 * ls;
+        const fingers = [];
+        for (let i = 0; i < 5; i++) {
+            const fAngle = wristAngle + (-0.1 - i * 0.25) * (1.0 + downStroke * 0.3) + Math.sin(phase - 1.0) * 0.3;
+            fingers.push({ x: wristX + Math.cos(fAngle) * (160 - i * 20) * ls, y: wristY + Math.sin(fAngle) * (160 - i * 20) * ls });
+        }
+        const g = ctx.createRadialGradient(shoulder.x, shoulder.y, 20 * ls, shoulder.x, shoulder.y, 180 * ls);
+        g.addColorStop(0, `rgba(255,60,10,${fillAlpha})`); g.addColorStop(0.4, `rgba(120,20,5,${fillAlpha})`); g.addColorStop(1, `rgba(25,5,2,${fillAlpha})`);
+        ctx.fillStyle = g; ctx.strokeStyle = `rgba(255,85,0,${strokeAlpha})`; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(shoulder.x, shoulder.y); ctx.lineTo(elbowX, elbowY); ctx.lineTo(wristX, wristY);
+        for (const f of fingers) ctx.lineTo(f.x, f.y);
+        ctx.lineTo(shoulder.x - 70 * ls, shoulder.y + 15 * ls);
+        ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.strokeStyle = `rgba(255,85,0,${isFront ? 0.6 : 0.3})`;
+        for (const f of fingers) { ctx.moveTo(wristX, wristY); ctx.lineTo(f.x, f.y); }
+        ctx.stroke();
+        this._drawJoint(ctx, shoulder.x, shoulder.y, 11 * ls);
+        this._drawJoint(ctx, elbowX, elbowY, 9 * ls);
+        this._drawJoint(ctx, wristX, wristY, 7 * ls);
+    }
+    _drawLeg(ctx, anchor, isFront, isForeLeg) {
+        const ls = isFront ? 1.15 : 0.85;
+        const ca = isFront ? 1 : 0.5;
+        let thighAngle = isForeLeg ? Math.PI * 0.85 : Math.PI * 0.25;
+        thighAngle += Math.sin(this.dragonTime * 4 + (isForeLeg ? 0 : 1.5)) * 0.15;
+        const kneeX = anchor.x + Math.cos(thighAngle) * 50 * ls;
+        const kneeY = anchor.y + Math.sin(thighAngle) * 50 * ls;
+        let shinAngle = isForeLeg ? Math.PI * 0.15 : Math.PI * 0.85;
+        shinAngle += Math.sin(this.dragonTime * 4 + (isForeLeg ? 0 : 1.5)) * 0.15;
+        const footX = kneeX + Math.cos(shinAngle) * 50 * ls;
+        const footY = kneeY + Math.sin(shinAngle) * 50 * ls;
+        ctx.strokeStyle = `rgba(65,20,15,${ca})`; ctx.lineWidth = 14 * ls; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(anchor.x, anchor.y); ctx.lineTo(kneeX, kneeY); ctx.lineTo(footX, footY); ctx.stroke();
+        ctx.fillStyle = `rgba(197,198,199,${ca})`;
+        for (let i = 0; i < 4; i++) {
+            const clawAngle = (i - 1.5) * 0.35;
+            ctx.beginPath(); ctx.moveTo(footX, footY);
+            ctx.quadraticCurveTo(footX + Math.cos(clawAngle - 0.4) * 18 * ls, footY + Math.sin(clawAngle - 0.4) * 18 * ls,
+                footX + Math.cos(clawAngle) * 30 * ls, footY + Math.sin(clawAngle) * 30 * ls);
+            ctx.lineTo(footX + Math.cos(clawAngle + 0.2) * 6, footY + 6); ctx.fill();
+        }
+        this._drawJoint(ctx, anchor.x, anchor.y, 9 * ls);
+        this._drawJoint(ctx, kneeX, kneeY, 8 * ls);
+        this._drawJoint(ctx, footX, footY, 7 * ls);
+    }
+    _drawHead(ctx) {
+        const t = this.dragonTime;
+        ctx.save(); ctx.translate(160, 0);
+        const fireCycle = t % 6; const isBreathingFire = fireCycle > 4.2;
+        let headTilt = 0;
+        if (isBreathingFire) {
+            const pf = fireCycle - 4.2;
+            headTilt = pf < 0.2 ? (pf / 0.2) * (Math.PI / 4) : pf > 1.6 ? ((1.8 - pf) / 0.2) * (Math.PI / 4) : Math.PI / 4;
+        }
+        ctx.rotate(Math.sin(t * 3) * 0.12 + headTilt);
+        const jawOpen = isBreathingFire ? 40 : Math.max(0, Math.sin(t * 6)) * 10;
+        ctx.fillStyle = '#2a0808'; ctx.strokeStyle = '#cc2200'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(0, -14); ctx.lineTo(50, -18); ctx.lineTo(55, -6); ctx.lineTo(22, 0); ctx.lineTo(-12, 10); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.save(); ctx.translate(12, 0); ctx.rotate(jawOpen * Math.PI / 180);
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(40, 6); ctx.lineTo(0, 14); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#fff';
+        for (let i = 0; i < 6; i++) {
+            ctx.beginPath(); ctx.moveTo(18 + i * 5 - 12, 0); ctx.lineTo(20 + i * 5 - 12, 8); ctx.lineTo(22 + i * 5 - 12, 0); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(12 + i * 5, 6); ctx.lineTo(14 + i * 5, -2); ctx.lineTo(16 + i * 5, 6); ctx.fill();
+        }
+        if (isBreathingFire) {
+            ctx.fillStyle = '#ff0000'; ctx.beginPath(); ctx.arc(18, 6, 10, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = 'rgba(255,100,0,0.6)'; ctx.shadowBlur = 20; ctx.shadowColor = '#ff4400';
+            ctx.beginPath(); ctx.arc(18, 6, 18, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
+        } else {
+            ctx.fillStyle = '#cc0000';
+            ctx.beginPath(); ctx.moveTo(10, 0); ctx.quadraticCurveTo(18, 18, 22, 12); ctx.quadraticCurveTo(18, 6, 12, 12); ctx.fill();
+        }
+        ctx.restore();
+        const isBlinking = (t % 4.5) < 0.12;
+        if (!isBlinking) {
+            ctx.fillStyle = '#ffdd00';
+            ctx.beginPath(); ctx.moveTo(20, -12); ctx.lineTo(30, -14); ctx.lineTo(32, -8); ctx.lineTo(22, -6); ctx.closePath(); ctx.fill();
+            ctx.fillStyle = 'rgba(255,255,0,0.4)'; ctx.shadowBlur = 10; ctx.shadowColor = '#ffff00';
+            ctx.beginPath(); ctx.arc(25, -10, 10, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
+            ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(25, -16); ctx.lineTo(25, -4); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(20, -10); ctx.lineTo(30, -10); ctx.stroke();
+        }
+        ctx.fillStyle = '#0b0c10'; ctx.strokeStyle = '#cc2200'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(8, -12); ctx.quadraticCurveTo(-8, -40, -25, -28); ctx.quadraticCurveTo(-8, -18, 8, -10); ctx.fill(); ctx.stroke();
+        ctx.restore();
+    }
+    _drawBody(ctx) {
+        const t = this.dragonTime;
+        const segs = [];
+        for (let i = 0; i < 32; i++) {
+            const tOff = t * 6 - i * 0.28;
+            const x = 160 - i * 18;
+            let y = Math.sin(tOff) * 22 + Math.sin(i * 0.1) * Math.cos(t * 1.8) * 12;
+            let r = i < 5 ? 12 + i * 2.5 : i < 16 ? 24 - (i - 5) * 0.3 : 20.7 - (i - 16) * 1.3;
+            segs.push({ x, y, r: Math.max(2, r) });
+        }
+        ctx.beginPath();
+        for (const s of segs) ctx.lineTo(s.x, s.y - s.r);
+        for (let i = segs.length - 1; i >= 0; i--) ctx.lineTo(segs[i].x, segs[i].y + segs[i].r);
+        ctx.fillStyle = '#2a0808'; ctx.fill();
+        ctx.strokeStyle = 'rgba(204,34,0,0.6)'; ctx.lineWidth = 1.5;
+        for (let i = segs.length - 1; i >= 0; i--) {
+            const s = segs[i];
+            const g = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.r * 1.5);
+            g.addColorStop(0, '#ff5500'); g.addColorStop(0.5, '#cc2200'); g.addColorStop(1, '#2a0808');
+            ctx.fillStyle = g;
+            const ang = i > 0 ? Math.atan2(s.y - segs[i - 1].y, s.x - segs[i - 1].x) : Math.PI;
+            const r = s.r * 1.4;
+            ctx.beginPath();
+            ctx.moveTo(s.x + Math.cos(ang) * r, s.y + Math.sin(ang) * r);
+            ctx.lineTo(s.x + Math.cos(ang + 2.4) * r, s.y + Math.sin(ang + 2.4) * r);
+            ctx.lineTo(s.x + Math.cos(ang - 2.4) * r, s.y + Math.sin(ang - 2.4) * r);
+            ctx.closePath(); ctx.fill(); ctx.stroke();
+            if (i % 2 === 0 && i > 3) {
+                const uAng = ang - Math.PI / 2;
+                const sl = Math.max(6, 12 + (20 - i) * 0.6);
+                ctx.fillStyle = '#ff5500';
+                ctx.beginPath();
+                ctx.moveTo(s.x + Math.cos(uAng) * s.r, s.y + Math.sin(uAng) * s.r);
+                ctx.lineTo(s.x + Math.cos(uAng) * (s.r + sl), s.y + Math.sin(uAng) * (s.r + sl));
+                ctx.lineTo(s.x + Math.cos(uAng + 0.3) * s.r, s.y + Math.sin(uAng + 0.3) * s.r);
+                ctx.fill();
+            }
+        }
+        const last = segs[segs.length - 1], pre = segs[segs.length - 2];
+        const tAng = Math.atan2(last.y - pre.y, last.x - pre.x);
+        ctx.fillStyle = '#ff5500';
+        ctx.beginPath();
+        ctx.moveTo(last.x + Math.cos(tAng + Math.PI / 2) * last.r, last.y + Math.sin(tAng + Math.PI / 2) * last.r);
+        ctx.lineTo(last.x + Math.cos(tAng) * 45, last.y + Math.sin(tAng) * 45);
+        ctx.lineTo(last.x + Math.cos(tAng - Math.PI / 2) * last.r, last.y + Math.sin(tAng - Math.PI / 2) * last.r);
+        ctx.fill();
+    }
+    draw(ctx, cam) {
+        if (this.dead) return;
+        const sx = this.x - cam.x, sy = this.y;
+        // Shadow on ground
+        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        ctx.beginPath(); ctx.ellipse(sx, this.world.groundY - 5, 110, 18, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.save();
+        applyHitGlow(ctx, this, '255,85,0');
+        ctx.translate(sx, sy);
+        if (!this.facingRight) ctx.scale(-1, 1); // Flip if facing left
+        const shoulder = { x: 40, y: 0 };
+        const hip = { x: -80, y: 20 };
+        // Back wing & legs (behind body)
+        this._drawWing(ctx, shoulder, false);
+        this._drawLeg(ctx, hip, false, false);
+        this._drawLeg(ctx, shoulder, false, true);
+        // Body
+        this._drawBody(ctx);
+        // Front wing & legs (in front of body)
+        this._drawLeg(ctx, hip, true, false);
+        this._drawLeg(ctx, shoulder, true, true);
+        this._drawWing(ctx, shoulder, true);
+        // Head
+        this._drawHead(ctx);
+        ctx.restore();
+        // HP bar
+        const hpBarW = 200, hpBarX = sx - hpBarW / 2, hpBarY = sy - 175;
+        ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(hpBarX, hpBarY, hpBarW, 10);
+        ctx.fillStyle = '#ff3300'; ctx.fillRect(hpBarX, hpBarY, (this.hp / this.maxHp) * hpBarW, 10);
+        ctx.strokeStyle = '#ff8800'; ctx.lineWidth = 1; ctx.strokeRect(hpBarX, hpBarY, hpBarW, 10);
+        ctx.fillStyle = '#ffaa00'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText('☽ WYRMWING', sx, hpBarY - 4); ctx.textAlign = 'left';
+    }
+}
+
 // ─── SHOP ─────────────────────────────────────────────────────────────────────
 class Shop {
+
     constructor(world, x, type) {
         this.world = world; this.x = x; this.y = world.groundY; this.type = type;
     }
@@ -3610,6 +3988,7 @@ class World {
         this.waveInterval = 180;
         this.waveNumber = 0;
         this.waveActive = false;
+        this.wyrmFires = [];
         this.moonRed = 0;
         this.time = 0;
         this.hiringBarrack = null; // which barrack is showing hire menu
@@ -3876,6 +4255,9 @@ class World {
         this.enemies.forEach(e => e.update(dt));
         this.enemies.filter(e => e.dead && !e.coinDropped).forEach(e => e.die(this));
         this.enemies = this.enemies.filter(e => !e.dead);
+        // WyrmFire projectiles
+        this.wyrmFires.forEach(f => f.update(dt));
+        this.wyrmFires = this.wyrmFires.filter(f => !f.dead);
         // Animals
         this.animals.forEach(a => a.update(dt));
         this.animals = this.animals.filter(a => !a.dead);
@@ -4013,6 +4395,10 @@ class World {
         this.waveNumber++;
         const count = 4 + this.waveNumber * 2;
         const spawnX = this.enemyCamp.dead ? 4000 : this.enemyCamp.x;
+        // Wave 3 and 7: Spawn the Wyrmwing Dragon flying boss
+        if (this.waveNumber === 3 || this.waveNumber === 7) {
+            this.enemies.push(new WyrmwingDragon(this, spawnX));
+        }
         for (let i = 0; i < count; i++) {
             const offsetX = (Math.random() - 0.5) * 80;
             if (this.waveNumber >= 6 && Math.random() < 0.3) {
@@ -4252,6 +4638,8 @@ class World {
         this.enemies.forEach(e => e.draw(ctx, cam));
         this.ladybugs.forEach(l => l.draw(ctx, cam));
         this.birds.forEach(b => b.draw(ctx, cam));
+        // WyrmFire — additive blended, drawn on top of everything before HUD
+        this.wyrmFires.forEach(f => f.draw(ctx, cam));
         ctx.beginPath();
         this.arrows.forEach(a => a.draw(ctx, cam));
         this.heroProjectiles.forEach(p => p.draw(ctx, cam));

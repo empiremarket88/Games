@@ -196,3 +196,19 @@ The `Trebuchet` class introduced a new pattern for **vehicle-class units** that 
 - **Projectile Hand-off**: `_getSlingTip()` uses a nested 2D rotation matrix to compute the world-space coordinate of the sling's release point at the exact moment of launch — preventing the "second bounce" misalignment artifact.
 - **Rolling Physics**: `SiegeRock` uses `Math.pow(0.5, dt)` exponential drag for deceleration that is frame-rate independent and physically plausible.
 - **Unified Heal Dispatch**: `_healAll()` checks trebuchet proximity and resource type (Wood) first, then falls back to unit healing with Wheat.
+
+## 🐉 Wyrmwing Procedural Animation (Dragon Preview)
+
+### 1. Kinematics & Wing Anatomy
+- **3D Sweep Illusion in 2D**: Instead of rigidly swinging a wing back and forth on a 2D plane, sweeping the wing's base angle from *up* to *down* across the Y-axis simulates 3D perspective foreshortening. Drawing the front wing *after* the body and the back wing *before* the body completes the illusion of the wings wrapping around the creature.
+- **Dynamic Finger Spreading**: Binding the fan spread of the wing fingers to the `-Math.cos(phase)` of the flap cycle creates a realistic "air-catching" effect. Fingers spread wide on the downstroke to catch air and fold tightly on the upstroke to reduce drag.
+- **Kinematic Ripple**: Offsetting the sine wave phase across the joints (shoulder -> elbow -> wrist -> fingers) creates a natural, organic whip-like motion, avoiding stiff, mechanical flapping.
+
+### 2. Rendering & Aesthetics
+- **Organic Joints**: Mechanical ball-and-socket joints look rigid. Replacing them with radial gradients that match the surrounding skin colors, combined with subtle offset crescent highlights, creates the appearance of natural, muscular joints.
+- **Leathery Skin Gradients**: Replacing transparent fills with opaque radial gradients provides a deep, solid feel to wing membranes. `isFront` booleans can toggle opacity slightly to simulate light bleeding through the front wing vs the back wing.
+- **Horizontal Flipping with Context**: Using `ctx.scale(-1, 1)` globally at the start of the `draw()` method is an elegant way to horizontally mirror a complex procedural creature without altering any of the local kinematic math or joint connections.
+
+### 3. Dynamic Particle Systems
+- **Orientation-Aware Particles**: When emitting particles inside a flipped context (`scale(-1, 1)`), physical velocities like `vx` visually invert. So a particle moving left (`vx < 0`) in code will correctly trail behind the dragon (visually right) when the dragon is horizontally flipped.
+- **State-Driven Emmitters**: Tying particle emission and specific limb animations to a `fireCycle` timer creates cohesive multi-part actions (e.g., smoothly tilting the head down 45 degrees while simultaneously switching to fire-breath particle emission).
